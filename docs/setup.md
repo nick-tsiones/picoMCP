@@ -4,18 +4,27 @@ Install qd, install the agent skills, initialize your repository, then verify th
 
 ## 1. Install the CLI
 
-Planned quick install:
+Install Vite+ first:
 
 ```sh
-curl -fsSL https://qdcli.dev/install.sh | sh
+curl -fsSL https://vite.plus | bash
+vp help
 ```
 
-Local development install:
+Current install from a clone:
 
 ```sh
-pnpm install
-pnpm build
-pnpm link --global
+vp install
+vp run -r build
+vp pm --filter qdcli link --global
+```
+
+On Nix, use the flake dev shell while trialing:
+
+```sh
+nix develop
+just install
+just ci
 ```
 
 Verify:
@@ -28,11 +37,9 @@ qd --version
 
 qd ships instructions for agents because the CLI is only useful when the orchestrator follows the DAG protocol and delegates work without bypassing qd's gates.
 
-Planned commands:
+Install the skills.sh-compatible skill:
 
 ```sh
-qd agent install codex
-qd agent install claude
 qd agent install skills-sh
 ```
 
@@ -50,24 +57,33 @@ The installed skill should teach the orchestrator to:
 ## 3. Initialize the repository
 
 ```sh
-qd setup
+qd setup --no-hooks
 ```
 
-This should create:
+`--no-hooks` is accepted for repos that want explicit hook opt-out. qd currently does not install git hooks by default; hooks remain a project-level choice.
+
+This creates:
 
 - `.qd/qd.db`
 - `.qd/config.toml`
 - `.qd/agents.md`
-- optional git hooks that warn when a claimed node is not linked to the current branch
+- `.qd/skills/qd-dag/SKILL.md`
 
-Configure the canonical green command:
+Configure the local preflight command and the canonical green command:
 
 ```sh
-qd config set check-command --value "nix develop -c just ci"
-qd config set ci-command --value "nix develop -c just ci"
+qd config set check-command --value "<fast project check command>"
+qd config set ci-command --value "<full project CI command>"
+qd config get ci-command
 ```
 
-Use the repository's real equivalent if it is not Nix. qd assumes this command is what makes a node safe to merge. The intended policy is green main: if CI does not pass, the node does not merge.
+Use the repository's real commands. qd is language- and stack-neutral.
+
+`check_command` is the faster local/orchestrator preflight. It runs when the orchestrator calls `qd check run <node>`. A passed check is recorded, but it does not make a node mergeable.
+
+`ci_command` is the full trusted merge gate. It runs when the orchestrator calls `qd ci run <node>`. A passed CI run moves the node to `mergeable`; a failed run blocks it. The intended policy is green main: if CI does not pass, the node does not merge.
+
+For qdcli itself, `vp run ci` is the full green command; other projects should configure their own equivalent.
 
 ## 4. Verify it works
 
@@ -94,15 +110,46 @@ Give the orchestrator agent one operational instruction:
 Read the qd DAG skill, run qd doctor, inspect qd status and qd ready, then orchestrate the DAG: delegate ready nodes, record audits and findings, require CI green, and merge only qd-mergeable work.
 ```
 
-For a single-link bootstrap, planned command:
+For a single-link bootstrap:
 
 ```sh
 qd setup --print-agent-url
 ```
 
-The printed page should walk the agent through installing/checking the CLI, loading the skill, initializing the repo, and using the DAG lifecycle.
+The printed page walks the agent through installing/checking the CLI, loading the skill, initializing the repo, and using the DAG lifecycle.
 
-## 6. View the DAG
+## 6. Import An Existing DAG
+
+For an existing project, do not create hundreds of nodes one at a time. Import the current roadmap JSON:
+
+```sh
+qd import --from roadmap/spec-dag.json --schema-mapping roadmap/qd-import-map.json
+qd validate
+```
+
+Mapping files are JSON. Each value is a dotted path in your source objects:
+
+```json
+{
+  "nodesPath": "nodes",
+  "edgesPath": "edges",
+  "id": "id",
+  "title": "title",
+  "spec": "description",
+  "acceptance": "acceptanceCriteria",
+  "group": "parallelGroup",
+  "projects": "projects",
+  "milestone": "target",
+  "verification": "verification",
+  "auditFocus": "auditFocus",
+  "edgeFrom": "from",
+  "edgeTo": "to"
+}
+```
+
+`qd graph --format json` emits the same shape qd imports by default, so export/import works for backup and re-tiering.
+
+## 7. View the DAG
 
 Start the Vite viewer:
 

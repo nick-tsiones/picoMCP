@@ -5,14 +5,15 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./dist/index.d.mts",
+      "types": "./src/index.ts",
       "default": "./dist/index.mjs"
     }
   },
   "scripts": {
-    "build": "tsdown src/index.ts --format esm --dts",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "build": "vp pack src/index.ts --format esm --dts",
+    "typecheck": "vp exec tsgo --noEmit -p tsconfig.json",
+    "typecheck:tsgo": "vp exec tsgo --noEmit -p tsconfig.json",
+    "test": "vp test run"
   },
   "dependencies": {
     "@tursodatabase/database": "^0.6.1"

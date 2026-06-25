@@ -43,7 +43,9 @@ function App() {
       <section className="topbar">
         <div>
           <h1>Quick DAG</h1>
-          <p>{snapshot.nodes.length} nodes · {snapshot.edges.length} edges · {ready.length} ready</p>
+          <p>
+            {snapshot.nodes.length} nodes · {snapshot.edges.length} edges · {ready.length} ready
+          </p>
         </div>
         <StatusSummary nodes={snapshot.nodes} analytics={analytics} />
       </section>
@@ -64,7 +66,12 @@ function App() {
             <div className="metrics">
               <span>Velocity {analytics.velocity.pointsPerDay.toFixed(2)} pts/day</span>
               <span>Critical path {analytics.criticalPath.criticalPathPoints} pts</span>
-              <span>ETA {analytics.eta.etaDays === null ? "unknown" : `${analytics.eta.etaDays.toFixed(1)} days`}</span>
+              <span>
+                ETA{" "}
+                {analytics.eta.etaDays === null
+                  ? "unknown"
+                  : `${analytics.eta.etaDays.toFixed(1)} days`}
+              </span>
             </div>
           ) : null}
           {snapshot.nodes.map((item) => (
@@ -80,13 +87,21 @@ function App() {
           ))}
         </section>
 
-        <aside className="detail">{node ? <NodeDetail node={node} snapshot={snapshot} /> : <p>Select a node.</p>}</aside>
+        <aside className="detail">
+          {node ? <NodeDetail node={node} snapshot={snapshot} /> : <p>Select a node.</p>}
+        </aside>
       </section>
     </main>
   );
 }
 
-function StatusSummary({ nodes, analytics }: { nodes: QdNode[]; analytics: AnalyticsReport | null }) {
+function StatusSummary({
+  nodes,
+  analytics,
+}: {
+  nodes: QdNode[];
+  analytics: AnalyticsReport | null;
+}) {
   const statuses = [...new Set(nodes.map((node) => node.status))];
   return (
     <div className="statusSummary">
@@ -102,7 +117,9 @@ function StatusSummary({ nodes, analytics }: { nodes: QdNode[]; analytics: Analy
 
 function NodeDetail({ node, snapshot }: { node: QdNode; snapshot: GraphSnapshot }) {
   const findings = snapshot.findings.filter((finding) => finding.node_id === node.id);
-  const dependencies = snapshot.edges.filter((edge) => edge.to_node === node.id && edge.type === "requires");
+  const dependencies = snapshot.edges.filter(
+    (edge) => edge.to_node === node.id && edge.type === "requires",
+  );
   return (
     <>
       <h2>{node.title}</h2>
@@ -123,7 +140,15 @@ function NodeDetail({ node, snapshot }: { node: QdNode; snapshot: GraphSnapshot 
       <h3>Dependencies</h3>
       <p>{dependencies.map((edge) => edge.from_node).join(", ") || "None"}</p>
       <h3>Findings</h3>
-      {findings.length === 0 ? <p>None</p> : findings.map((finding) => <p key={finding.id}>{finding.severity}: {finding.title}</p>)}
+      {findings.length === 0 ? (
+        <p>None</p>
+      ) : (
+        findings.map((finding) => (
+          <p key={finding.id}>
+            {finding.severity}: {finding.title}
+          </p>
+        ))
+      )}
     </>
   );
 }

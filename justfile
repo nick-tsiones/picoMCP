@@ -7,28 +7,31 @@ install:
   corepack pnpm install
 
 build:
-  corepack pnpm run build
+  corepack pnpm exec vp run -r build
 
 test:
-  corepack pnpm run test
+  corepack pnpm exec vp test
 
 lint:
-  corepack pnpm run lint
+  corepack pnpm exec vp lint
 
 typecheck:
-  corepack pnpm run typecheck
+  corepack pnpm exec vp check
+
+typecheck-tsgo:
+  corepack pnpm exec vp run typecheck:tsgo
 
 format:
-  corepack pnpm run format
+  corepack pnpm exec vp fmt --write .
 
 format-check:
-  corepack pnpm run format:check
+  corepack pnpm exec vp fmt --check .
 
 ci:
-  corepack pnpm run ci
+  corepack pnpm exec vp run ci
 
 pack:
-  corepack pnpm run pack
+  corepack pnpm exec vp run pack
 
 view *ARGS:
-  corepack pnpm --filter @qdcli/viewer dev {{ARGS}}
+  corepack pnpm exec vp run @qdcli/viewer#dev -- {{ARGS}}

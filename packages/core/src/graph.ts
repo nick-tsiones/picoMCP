@@ -1,8 +1,18 @@
 import { randomUUID } from "node:crypto";
-import { all, applyMigrations, get, initProject, openDatabase, readConfig, run, type Database } from "./db.js";
+import {
+  all,
+  applyMigrations,
+  get,
+  initProject,
+  openDatabase,
+  readConfig,
+  run,
+  type Database,
+} from "./db.js";
 import type {
   EdgeType,
   GraphSnapshot,
+  NodeNote,
   NodeKind,
   NodeStatus,
   Priority,
@@ -10,8 +20,10 @@ import type {
   QdFinding,
   QdNode,
   QdRun,
+  RegistryEntry,
   Risk,
   RunKind,
+  VerificationEntry,
 } from "./types.js";
 
 export interface AddNodeInput {
@@ -19,6 +31,8 @@ export interface AddNodeInput {
   title: string;
   kind?: NodeKind;
   milestone?: string | null;
+  groupName?: string | null;
+  projects?: string[];
   status?: NodeStatus;
   priority?: Priority;
   estimatePoints?: number;
@@ -26,13 +40,23 @@ export interface AddNodeInput {
   spec: string;
   acceptance: string;
   validation?: string | null;
+  verification?: VerificationEntry[];
+  auditFocus?: string[];
   context?: string | null;
+  statusReason?: string | null;
+  checkCommand?: string | null;
 }
 
 export interface ValidationResult {
   ok: boolean;
   errors: string[];
   warnings: string[];
+}
+
+interface NodeRow extends Omit<QdNode, "projects" | "verification" | "audit_focus"> {
+  projects_json: string;
+  verification_json: string;
+  audit_focus_json: string;
 }
 
 export async function setupProject(root = process.cwd()): Promise<void> {
@@ -51,6 +75,8 @@ export async function addNode(root: string, input: AddNodeInput): Promise<QdNode
     title: input.title,
     kind: input.kind ?? "feature",
     milestone: input.milestone ?? null,
+    group_name: input.groupName ?? null,
+    projects: input.projects ?? [],
     status: input.status ?? "ready",
     priority: input.priority ?? "P2",
     estimate_points: input.estimatePoints ?? 1,
@@ -60,24 +86,31 @@ export async function addNode(root: string, input: AddNodeInput): Promise<QdNode
     spec: input.spec,
     acceptance: input.acceptance,
     validation: input.validation ?? null,
+    verification: input.verification ?? [],
+    audit_focus: input.auditFocus ?? [],
     context: input.context ?? null,
+    status_reason: input.statusReason ?? null,
+    check_command: input.checkCommand ?? null,
     created_at: now,
     updated_at: now,
     claimed_at: null,
     done_at: null,
   };
   assertNodeQuality(node);
+  await assertNodeRegistryValues(db, node);
   await run(
     db,
     `insert into nodes (
-      id, title, kind, milestone, status, priority, estimate_points, risk, owner, branch,
-      spec, acceptance, validation, context, created_at, updated_at, claimed_at, done_at
-    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      id, title, kind, milestone, group_name, projects_json, status, priority, estimate_points, risk, owner, branch,
+      spec, acceptance, validation, verification_json, audit_focus_json, context, status_reason, check_command, created_at, updated_at, claimed_at, done_at
+    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       node.id,
       node.title,
       node.kind,
       node.milestone,
+      node.group_name,
+      JSON.stringify(node.projects),
       node.status,
       node.priority,
       node.estimate_points,
@@ -87,7 +120,11 @@ export async function addNode(root: string, input: AddNodeInput): Promise<QdNode
       node.spec,
       node.acceptance,
       node.validation,
+      JSON.stringify(node.verification),
+      JSON.stringify(node.audit_focus),
       node.context,
+      node.status_reason,
+      node.check_command,
       node.created_at,
       node.updated_at,
       node.claimed_at,
@@ -100,7 +137,27 @@ export async function addNode(root: string, input: AddNodeInput): Promise<QdNode
 export async function updateNode(
   root: string,
   id: string,
-  updates: Partial<Pick<QdNode, "title" | "kind" | "milestone" | "status" | "priority" | "risk" | "spec" | "acceptance" | "validation" | "context">> & {
+  updates: Partial<
+    Pick<
+      QdNode,
+      | "title"
+      | "kind"
+      | "milestone"
+      | "group_name"
+      | "projects"
+      | "status"
+      | "priority"
+      | "risk"
+      | "spec"
+      | "acceptance"
+      | "validation"
+      | "verification"
+      | "audit_focus"
+      | "context"
+      | "status_reason"
+      | "check_command"
+    >
+  > & {
     estimatePoints?: number;
   },
 ): Promise<QdNode> {
@@ -113,16 +170,19 @@ export async function updateNode(
     updated_at: new Date().toISOString(),
   };
   assertNodeQuality(next);
+  await assertNodeRegistryValues(db, next);
   await run(
     db,
     `update nodes set
-      title = ?, kind = ?, milestone = ?, status = ?, priority = ?, estimate_points = ?, risk = ?,
-      spec = ?, acceptance = ?, validation = ?, context = ?, updated_at = ?
+      title = ?, kind = ?, milestone = ?, group_name = ?, projects_json = ?, status = ?, priority = ?, estimate_points = ?, risk = ?,
+      spec = ?, acceptance = ?, validation = ?, verification_json = ?, audit_focus_json = ?, context = ?, status_reason = ?, check_command = ?, updated_at = ?
     where id = ?`,
     [
       next.title,
       next.kind,
       next.milestone,
+      next.group_name,
+      JSON.stringify(next.projects),
       next.status,
       next.priority,
       next.estimate_points,
@@ -130,7 +190,11 @@ export async function updateNode(
       next.spec,
       next.acceptance,
       next.validation,
+      JSON.stringify(next.verification),
+      JSON.stringify(next.audit_focus),
       next.context,
+      next.status_reason,
+      next.check_command,
       next.updated_at,
       id,
     ],
@@ -140,19 +204,20 @@ export async function updateNode(
 
 export async function listNodes(root: string): Promise<QdNode[]> {
   const db = await openDatabase(root);
-  return all<QdNode>(
+  const rows = await all<NodeRow>(
     db,
     `select * from nodes order by
       case priority when 'P0' then 0 when 'P1' then 1 when 'P2' then 2 else 3 end,
       created_at asc`,
   );
+  return rows.map(hydrateNode);
 }
 
 export async function getNode(root: string, id: string): Promise<QdNode> {
   const db = await openDatabase(root);
-  const node = await get<QdNode>(db, "select * from nodes where id = ?", [id]);
-  if (!node) throw new Error(`Node not found: ${id}`);
-  return node;
+  const row = await get<NodeRow>(db, "select * from nodes where id = ?", [id]);
+  if (!row) throw new Error(`Node not found: ${id}`);
+  return hydrateNode(row);
 }
 
 export async function cancelNode(root: string, id: string): Promise<QdNode> {
@@ -173,7 +238,12 @@ export async function addEdge(
   if (type === "requires" && (await wouldCreateCycle(db, fromNode, toNode))) {
     throw new Error(`Adding ${fromNode} -> ${toNode} would create a cycle`);
   }
-  const edge: QdEdge = { from_node: fromNode, to_node: toNode, type, created_at: new Date().toISOString() };
+  const edge: QdEdge = {
+    from_node: fromNode,
+    to_node: toNode,
+    type,
+    created_at: new Date().toISOString(),
+  };
   await run(db, "insert into edges (from_node, to_node, type, created_at) values (?, ?, ?, ?)", [
     edge.from_node,
     edge.to_node,
@@ -190,7 +260,11 @@ export async function removeEdge(
   type: EdgeType = "requires",
 ): Promise<void> {
   const db = await openDatabase(root);
-  await run(db, "delete from edges where from_node = ? and to_node = ? and type = ?", [fromNode, toNode, type]);
+  await run(db, "delete from edges where from_node = ? and to_node = ? and type = ?", [
+    fromNode,
+    toNode,
+    type,
+  ]);
 }
 
 export async function listEdges(root: string): Promise<QdEdge[]> {
@@ -200,7 +274,7 @@ export async function listEdges(root: string): Promise<QdEdge[]> {
 
 export async function readyNodes(root: string): Promise<QdNode[]> {
   const db = await openDatabase(root);
-  return all<QdNode>(
+  const rows = await all<NodeRow>(
     db,
     `select n.*
     from nodes n
@@ -218,6 +292,7 @@ export async function readyNodes(root: string): Promise<QdNode[]> {
       n.estimate_points asc,
       n.created_at asc`,
   );
+  return rows.map(hydrateNode);
 }
 
 export async function claimNode(
@@ -227,7 +302,9 @@ export async function claimNode(
   const ready = await readyNodes(root);
   const node = input.id ? ready.find((candidate) => candidate.id === input.id) : ready[0];
   if (!node) {
-    throw new Error(input.id ? `Node is not ready or does not exist: ${input.id}` : "No ready nodes");
+    throw new Error(
+      input.id ? `Node is not ready or does not exist: ${input.id}` : "No ready nodes",
+    );
   }
   const now = new Date().toISOString();
   const branch = input.branch ?? `qd/${node.id}`;
@@ -244,7 +321,12 @@ export async function startRun(
   root: string,
   nodeId: string,
   kind: RunKind,
-  input: { agent?: string | null; worktreePath?: string | null; summary?: string | null; logPath?: string | null } = {},
+  input: {
+    agent?: string | null;
+    worktreePath?: string | null;
+    summary?: string | null;
+    logPath?: string | null;
+  } = {},
 ): Promise<QdRun> {
   const db = await openDatabase(root);
   await assertNodeExists(db, nodeId);
@@ -362,7 +444,10 @@ export async function resolveFinding(root: string, findingId: string): Promise<Q
   return finding;
 }
 
-export async function gateNode(root: string, nodeId: string): Promise<{ ok: boolean; blocking: QdFinding[] }> {
+export async function gateNode(
+  root: string,
+  nodeId: string,
+): Promise<{ ok: boolean; blocking: QdFinding[] }> {
   const db = await openDatabase(root);
   const blocking = await all<QdFinding>(
     db,
@@ -407,21 +492,28 @@ export async function ciPass(root: string, nodeId: string, summary = "CI passed"
   if (!gate.ok) throw new Error("Cannot pass CI while P0/P1 findings are open");
   const db = await openDatabase(root);
   const now = new Date().toISOString();
-  await run(db, "insert into runs (id, node_id, kind, status, started_at, finished_at, summary) values (?, ?, 'ci', 'passed', ?, ?, ?)", [
-    randomUUID(),
+  await run(
+    db,
+    "insert into runs (id, node_id, kind, status, started_at, finished_at, summary) values (?, ?, 'ci', 'passed', ?, ?, ?)",
+    [randomUUID(), nodeId, now, now, summary],
+  );
+  await run(db, "update nodes set status = 'mergeable', updated_at = ? where id = ?", [
+    now,
     nodeId,
-    now,
-    now,
-    summary,
   ]);
-  await run(db, "update nodes set status = 'mergeable', updated_at = ? where id = ?", [now, nodeId]);
   return getNode(root, nodeId);
 }
 
 export async function recordCiResult(
   root: string,
   nodeId: string,
-  input: { status: "passed" | "failed"; summary: string; logPath?: string | null; startedAt?: string; finishedAt?: string },
+  input: {
+    status: "passed" | "failed";
+    summary: string;
+    logPath?: string | null;
+    startedAt?: string;
+    finishedAt?: string;
+  },
 ): Promise<QdNode> {
   const db = await openDatabase(root);
   const now = new Date().toISOString();
@@ -431,7 +523,15 @@ export async function recordCiResult(
     db,
     `insert into runs (id, node_id, kind, status, started_at, finished_at, summary, log_path)
     values (?, ?, 'ci', ?, ?, ?, ?, ?)`,
-    [randomUUID(), nodeId, input.status, startedAt, finishedAt, input.summary, input.logPath ?? null],
+    [
+      randomUUID(),
+      nodeId,
+      input.status,
+      startedAt,
+      finishedAt,
+      input.summary,
+      input.logPath ?? null,
+    ],
   );
   await run(db, "update nodes set status = ?, updated_at = ? where id = ?", [
     input.status === "passed" ? "mergeable" : "blocked",
@@ -441,16 +541,53 @@ export async function recordCiResult(
   return getNode(root, nodeId);
 }
 
+export async function recordCheckResult(
+  root: string,
+  nodeId: string,
+  input: {
+    status: "passed" | "failed";
+    summary: string;
+    logPath?: string | null;
+    startedAt?: string;
+    finishedAt?: string;
+  },
+): Promise<QdNode> {
+  const db = await openDatabase(root);
+  await assertNodeExists(db, nodeId);
+  const now = new Date().toISOString();
+  const startedAt = input.startedAt ?? now;
+  const finishedAt = input.finishedAt ?? now;
+  await run(
+    db,
+    `insert into runs (id, node_id, kind, status, started_at, finished_at, summary, log_path)
+    values (?, ?, 'check', ?, ?, ?, ?, ?)`,
+    [
+      randomUUID(),
+      nodeId,
+      input.status,
+      startedAt,
+      finishedAt,
+      input.summary,
+      input.logPath ?? null,
+    ],
+  );
+  if (input.status === "failed") {
+    await run(db, "update nodes set status = 'blocked', updated_at = ? where id = ?", [
+      finishedAt,
+      nodeId,
+    ]);
+  }
+  return getNode(root, nodeId);
+}
+
 export async function ciFail(root: string, nodeId: string, summary = "CI failed"): Promise<QdNode> {
   const db = await openDatabase(root);
   const now = new Date().toISOString();
-  await run(db, "insert into runs (id, node_id, kind, status, started_at, finished_at, summary) values (?, ?, 'ci', 'failed', ?, ?, ?)", [
-    randomUUID(),
-    nodeId,
-    now,
-    now,
-    summary,
-  ]);
+  await run(
+    db,
+    "insert into runs (id, node_id, kind, status, started_at, finished_at, summary) values (?, ?, 'ci', 'failed', ?, ?, ?)",
+    [randomUUID(), nodeId, now, now, summary],
+  );
   await run(db, "update nodes set status = 'blocked', updated_at = ? where id = ?", [now, nodeId]);
   return getNode(root, nodeId);
 }
@@ -460,10 +597,12 @@ export async function markMerged(root: string, nodeId: string, strategy: string)
   const gate = await gateNode(root, nodeId);
   if (!gate.ok) throw new Error("Cannot merge while P0/P1 findings are open");
   const node = await getNode(root, nodeId);
-  if (node.status !== "mergeable") throw new Error(`Cannot merge node with status ${node.status}; expected mergeable`);
+  if (node.status !== "mergeable")
+    throw new Error(`Cannot merge node with status ${node.status}; expected mergeable`);
   if (config.requireCiBeforeMerge) {
     const latestCi = await latestRun(root, nodeId, "ci");
-    if (!latestCi || latestCi.status !== "passed") throw new Error("Cannot merge without a latest passed CI run");
+    if (!latestCi || latestCi.status !== "passed")
+      throw new Error("Cannot merge without a latest passed CI run");
   }
   const db = await openDatabase(root);
   const now = new Date().toISOString();
@@ -472,11 +611,19 @@ export async function markMerged(root: string, nodeId: string, strategy: string)
     "insert into runs (id, node_id, kind, status, started_at, finished_at, summary) values (?, ?, 'merge', 'recorded', ?, ?, ?)",
     [randomUUID(), nodeId, now, now, `Merge recorded with ${strategy}`],
   );
-  await run(db, "update nodes set status = 'done', done_at = ?, updated_at = ? where id = ?", [now, now, nodeId]);
+  await run(db, "update nodes set status = 'done', done_at = ?, updated_at = ? where id = ?", [
+    now,
+    now,
+    nodeId,
+  ]);
   return getNode(root, nodeId);
 }
 
-export async function latestRun(root: string, nodeId: string, kind: RunKind): Promise<QdRun | undefined> {
+export async function latestRun(
+  root: string,
+  nodeId: string,
+  kind: RunKind,
+): Promise<QdRun | undefined> {
   const db = await openDatabase(root);
   return get<QdRun>(
     db,
@@ -488,7 +635,7 @@ export async function latestRun(root: string, nodeId: string, kind: RunKind): Pr
 export async function graphSnapshot(root: string): Promise<GraphSnapshot> {
   const db = await openDatabase(root);
   return {
-    nodes: await all<QdNode>(db, "select * from nodes order by created_at asc"),
+    nodes: (await all<NodeRow>(db, "select * from nodes order by created_at asc")).map(hydrateNode),
     edges: await all<QdEdge>(db, "select * from edges order by created_at asc"),
     findings: await all<QdFinding>(db, "select * from findings order by created_at asc"),
     runs: await all<QdRun>(db, "select * from runs order by started_at asc"),
@@ -509,16 +656,18 @@ export async function validateGraph(root: string): Promise<ValidationResult> {
     if (node.spec.trim().length === 0) {
       errors.push(`${node.id}: node is missing spec`);
     }
+    const registryErrors = await nodeRegistryErrors(db, node);
+    errors.push(...registryErrors.map((error) => `${node.id}: ${error}`));
   }
 
   const cycle = findCycle(edges.filter((edge) => edge.type === "requires"));
   if (cycle) errors.push(`requires edge cycle detected: ${cycle.join(" -> ")}`);
 
   for (const edge of edges) {
-    if (!(await get<QdNode>(db, "select * from nodes where id = ?", [edge.from_node]))) {
+    if (!(await get<NodeRow>(db, "select * from nodes where id = ?", [edge.from_node]))) {
       errors.push(`edge references missing from_node: ${edge.from_node}`);
     }
-    if (!(await get<QdNode>(db, "select * from nodes where id = ?", [edge.to_node]))) {
+    if (!(await get<NodeRow>(db, "select * from nodes where id = ?", [edge.to_node]))) {
       errors.push(`edge references missing to_node: ${edge.to_node}`);
     }
   }
@@ -531,6 +680,72 @@ export async function validateGraph(root: string): Promise<ValidationResult> {
   }
 
   return { ok: errors.length === 0, errors, warnings };
+}
+
+export async function registerGroup(root: string, name: string): Promise<RegistryEntry> {
+  return registerName(root, "groups", name);
+}
+
+export async function registerProject(root: string, name: string): Promise<RegistryEntry> {
+  return registerName(root, "projects", name);
+}
+
+export async function registerMilestone(
+  root: string,
+  name: string,
+  rank: number,
+): Promise<RegistryEntry> {
+  const db = await openDatabase(root);
+  const now = new Date().toISOString();
+  await run(db, "insert or replace into milestones (name, rank, created_at) values (?, ?, ?)", [
+    name,
+    rank,
+    now,
+  ]);
+  return { name, rank, created_at: now };
+}
+
+export async function listRegistry(
+  root: string,
+  table: "groups" | "projects" | "milestones",
+): Promise<RegistryEntry[]> {
+  const db = await openDatabase(root);
+  const order = table === "milestones" ? "rank asc" : "name asc";
+  return all<RegistryEntry>(db, `select * from ${table} order by ${order}`);
+}
+
+export async function addNodeNote(root: string, nodeId: string, text: string): Promise<NodeNote> {
+  const db = await openDatabase(root);
+  await assertNodeExists(db, nodeId);
+  const note: NodeNote = {
+    id: randomUUID(),
+    node_id: nodeId,
+    text,
+    created_at: new Date().toISOString(),
+  };
+  await run(db, "insert into node_notes (id, node_id, text, created_at) values (?, ?, ?, ?)", [
+    note.id,
+    note.node_id,
+    note.text,
+    note.created_at,
+  ]);
+  const node = await getNode(root, nodeId);
+  const statusReason = [node.status_reason, `[${note.created_at}] ${text}`]
+    .filter(Boolean)
+    .join("\n");
+  await run(db, "update nodes set status_reason = ?, updated_at = ? where id = ?", [
+    statusReason,
+    note.created_at,
+    nodeId,
+  ]);
+  return note;
+}
+
+export async function listNodeNotes(root: string, nodeId: string): Promise<NodeNote[]> {
+  const db = await openDatabase(root);
+  return all<NodeNote>(db, "select * from node_notes where node_id = ? order by created_at asc", [
+    nodeId,
+  ]);
 }
 
 export async function stats(root: string): Promise<Record<string, unknown>> {
@@ -555,20 +770,29 @@ export async function stats(root: string): Promise<Record<string, unknown>> {
     totalPoints,
     remainingPoints: totalPoints - donePoints,
     openP0P1Findings: snapshot.findings.filter(
-      (finding) => finding.status === "open" && (finding.severity === "P0" || finding.severity === "P1"),
+      (finding) =>
+        finding.status === "open" && (finding.severity === "P0" || finding.severity === "P1"),
     ).length,
   };
 }
 
-export async function setNodeStatus(root: string, nodeId: string, status: NodeStatus): Promise<void> {
+export async function setNodeStatus(
+  root: string,
+  nodeId: string,
+  status: NodeStatus,
+): Promise<void> {
   const db = await openDatabase(root);
-  await run(db, "update nodes set status = ?, updated_at = ? where id = ?", [status, new Date().toISOString(), nodeId]);
+  await run(db, "update nodes set status = ?, updated_at = ? where id = ?", [
+    status,
+    new Date().toISOString(),
+    nodeId,
+  ]);
 }
 
 async function uniqueNodeId(db: Database, base: string): Promise<string> {
   let candidate = base || "node";
   let suffix = 2;
-  while (await get<QdNode>(db, "select * from nodes where id = ?", [candidate])) {
+  while (await get<NodeRow>(db, "select * from nodes where id = ?", [candidate])) {
     candidate = `${base}-${suffix}`;
     suffix += 1;
   }
@@ -576,17 +800,96 @@ async function uniqueNodeId(db: Database, base: string): Promise<string> {
 }
 
 async function assertNodeExists(db: Database, id: string): Promise<void> {
-  const node = await get<QdNode>(db, "select * from nodes where id = ?", [id]);
+  const node = await get<NodeRow>(db, "select * from nodes where id = ?", [id]);
   if (!node) throw new Error(`Node not found: ${id}`);
 }
 
-function assertNodeQuality(node: Pick<QdNode, "id" | "title" | "spec" | "acceptance" | "estimate_points">): void {
+function assertNodeQuality(
+  node: Pick<QdNode, "id" | "title" | "spec" | "acceptance" | "estimate_points">,
+): void {
   if (!node.id.trim()) throw new Error("Node id is required");
   if (!node.title.trim()) throw new Error("Node title is required");
   if (!node.spec.trim()) throw new Error("Node spec is required");
   if (!node.acceptance.trim()) throw new Error("Node acceptance criteria are required");
   if (!Number.isInteger(node.estimate_points) || node.estimate_points < 1) {
     throw new Error("Node estimate_points must be a positive integer");
+  }
+}
+
+async function registerName(
+  root: string,
+  table: "groups" | "projects",
+  name: string,
+): Promise<RegistryEntry> {
+  const db = await openDatabase(root);
+  const now = new Date().toISOString();
+  await run(db, `insert or replace into ${table} (name, created_at) values (?, ?)`, [name, now]);
+  return { name, created_at: now };
+}
+
+async function assertNodeRegistryValues(db: Database, node: QdNode): Promise<void> {
+  const errors = await nodeRegistryErrors(db, node);
+  if (errors.length > 0) throw new Error(errors.join("; "));
+}
+
+async function nodeRegistryErrors(db: Database, node: QdNode): Promise<string[]> {
+  const errors: string[] = [];
+  if (
+    node.group_name &&
+    (await registryHasValues(db, "groups")) &&
+    !(await registryContains(db, "groups", node.group_name))
+  ) {
+    errors.push(`unknown group: ${node.group_name}`);
+  }
+  if (
+    node.milestone &&
+    (await registryHasValues(db, "milestones")) &&
+    !(await registryContains(db, "milestones", node.milestone))
+  ) {
+    errors.push(`unknown milestone: ${node.milestone}`);
+  }
+  if (await registryHasValues(db, "projects")) {
+    for (const project of node.projects) {
+      if (!(await registryContains(db, "projects", project)))
+        errors.push(`unknown project: ${project}`);
+    }
+  }
+  return errors;
+}
+
+async function registryHasValues(
+  db: Database,
+  table: "groups" | "projects" | "milestones",
+): Promise<boolean> {
+  const row = await get<{ count: number }>(db, `select count(*) as count from ${table}`);
+  return (row?.count ?? 0) > 0;
+}
+
+async function registryContains(
+  db: Database,
+  table: "groups" | "projects" | "milestones",
+  name: string,
+): Promise<boolean> {
+  const row = await get<{ name: string }>(db, `select name from ${table} where name = ?`, [name]);
+  return Boolean(row);
+}
+
+function hydrateNode(row: NodeRow): QdNode {
+  return {
+    ...row,
+    projects: parseJsonArray<string>(row.projects_json),
+    verification: parseJsonArray<VerificationEntry>(row.verification_json),
+    audit_focus: parseJsonArray<string>(row.audit_focus_json),
+  };
+}
+
+function parseJsonArray<T>(value: string | null | undefined): T[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? (parsed as T[]) : [];
+  } catch {
+    return [];
   }
 }
 

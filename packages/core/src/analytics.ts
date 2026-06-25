@@ -16,11 +16,18 @@ export async function velocityReport(root: string, windowDays = 7): Promise<Velo
   return calculateVelocity(await graphSnapshot(root), windowDays);
 }
 
-export async function criticalPathReport(root: string, milestone: string | null = null): Promise<CriticalPathReport> {
+export async function criticalPathReport(
+  root: string,
+  milestone: string | null = null,
+): Promise<CriticalPathReport> {
   return calculateCriticalPath(await graphSnapshot(root), milestone);
 }
 
-export async function etaReport(root: string, milestone: string | null = null, windowDays = 7): Promise<EtaReport> {
+export async function etaReport(
+  root: string,
+  milestone: string | null = null,
+  windowDays = 7,
+): Promise<EtaReport> {
   const snapshot = await graphSnapshot(root);
   return calculateEta(snapshot, milestone, windowDays);
 }
@@ -59,12 +66,17 @@ export function calculateStats(snapshot: GraphSnapshot): Record<string, unknown>
     totalPoints,
     remainingPoints: totalPoints - donePoints,
     openP0P1Findings: snapshot.findings.filter(
-      (finding) => finding.status === "open" && (finding.severity === "P0" || finding.severity === "P1"),
+      (finding) =>
+        finding.status === "open" && (finding.severity === "P0" || finding.severity === "P1"),
     ).length,
   };
 }
 
-export function calculateVelocity(snapshot: GraphSnapshot, windowDays = 7, now = new Date()): VelocityReport {
+export function calculateVelocity(
+  snapshot: GraphSnapshot,
+  windowDays = 7,
+  now = new Date(),
+): VelocityReport {
   const sinceMs = now.getTime() - windowDays * 24 * 60 * 60 * 1000;
   const completed = snapshot.nodes.filter((node) => {
     if (node.status !== "done" || !node.done_at) return false;
@@ -73,7 +85,11 @@ export function calculateVelocity(snapshot: GraphSnapshot, windowDays = 7, now =
   const completedPoints = completed.reduce((sum, node) => sum + node.estimate_points, 0);
   const cycleHours = completed
     .filter((node) => node.claimed_at && node.done_at)
-    .map((node) => (new Date(node.done_at ?? "").getTime() - new Date(node.claimed_at ?? "").getTime()) / 3_600_000)
+    .map(
+      (node) =>
+        (new Date(node.done_at ?? "").getTime() - new Date(node.claimed_at ?? "").getTime()) /
+        3_600_000,
+    )
     .filter((hours) => Number.isFinite(hours) && hours >= 0);
 
   return {
@@ -87,7 +103,10 @@ export function calculateVelocity(snapshot: GraphSnapshot, windowDays = 7, now =
   };
 }
 
-export function calculateCriticalPath(snapshot: GraphSnapshot, milestone: string | null = null): CriticalPathReport {
+export function calculateCriticalPath(
+  snapshot: GraphSnapshot,
+  milestone: string | null = null,
+): CriticalPathReport {
   const scoped = snapshot.nodes.filter((node) => !milestone || node.milestone === milestone);
   const scopedIds = new Set(scoped.map((node) => node.id));
   const remaining = scoped.filter((node) => !doneStatuses.has(node.status));
@@ -102,7 +121,8 @@ export function calculateCriticalPath(snapshot: GraphSnapshot, milestone: string
   );
   const byId = new Map(remaining.map((node) => [node.id, node]));
   const children = new Map<string, string[]>();
-  for (const edge of edges) children.set(edge.from_node, [...(children.get(edge.from_node) ?? []), edge.to_node]);
+  for (const edge of edges)
+    children.set(edge.from_node, [...(children.get(edge.from_node) ?? []), edge.to_node]);
 
   const memo = new Map<string, { points: number; path: string[] }>();
   function longestFrom(id: string): { points: number; path: string[] } {
@@ -112,7 +132,10 @@ export function calculateCriticalPath(snapshot: GraphSnapshot, milestone: string
     if (!node) return { points: 0, path: [] };
     const childPaths = (children.get(id) ?? []).map(longestFrom);
     const bestChild = childPaths.sort((a, b) => b.points - a.points)[0] ?? { points: 0, path: [] };
-    const result = { points: node.estimate_points + bestChild.points, path: [id, ...bestChild.path] };
+    const result = {
+      points: node.estimate_points + bestChild.points,
+      path: [id, ...bestChild.path],
+    };
     memo.set(id, result);
     return result;
   }
@@ -148,7 +171,9 @@ export function calculateEta(
   const velocity = calculateVelocity(snapshot, windowDays, now);
   const criticalPath = calculateCriticalPath(snapshot, milestone);
   const etaDays =
-    velocity.pointsPerDay > 0 ? Math.max(criticalPath.criticalPathPoints / velocity.pointsPerDay, 0) : null;
+    velocity.pointsPerDay > 0
+      ? Math.max(criticalPath.criticalPathPoints / velocity.pointsPerDay, 0)
+      : null;
   const etaDate =
     etaDays === null ? null : new Date(now.getTime() + etaDays * 24 * 60 * 60 * 1000).toISOString();
   return {

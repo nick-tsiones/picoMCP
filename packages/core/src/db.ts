@@ -21,6 +21,7 @@ export interface QdConfig {
   ciCommand: string;
   mergeStrategy: "squash" | "merge" | "rebase";
   requireCleanWorktree: boolean;
+  cleanWorktreeExcept: string[];
   requireGateBeforeCi: boolean;
   requireCiBeforeMerge: boolean;
 }
@@ -28,10 +29,11 @@ export interface QdConfig {
 export const defaultConfig: QdConfig = {
   schemaVersion: 1,
   skillsDir: ".qd/skills",
-  checkCommand: "nix develop -c just ci",
-  ciCommand: "nix develop -c just ci",
+  checkCommand: "",
+  ciCommand: "",
   mergeStrategy: "squash",
   requireCleanWorktree: true,
+  cleanWorktreeExcept: [".qd/"],
   requireGateBeforeCi: true,
   requireCiBeforeMerge: true,
 };
@@ -58,10 +60,11 @@ export async function initProject(root = process.cwd()): Promise<ProjectPaths> {
 # qd expects one canonical command that means "this node is safe to merge".
 schema_version = 1
 skills_dir = ".qd/skills"
-check_command = "nix develop -c just ci"
-ci_command = "nix develop -c just ci"
+check_command = ""
+ci_command = ""
 merge_strategy = "squash"
 require_clean_worktree = true
+clean_worktree_except = [".qd/"]
 require_gate_before_ci = true
 require_ci_before_merge = true
 `,
@@ -93,7 +96,7 @@ export async function writeConfig(root: string, config: QdConfig): Promise<void>
 }
 
 export function parseConfig(content: string): QdConfig {
-  const values: Record<string, string | boolean | number> = {};
+  const values: Record<string, string | boolean | number | string[]> = {};
   for (const rawLine of content.split(/\r?\n/)) {
     const line = rawLine.replace(/#.*$/, "").trim();
     if (!line) continue;
@@ -111,9 +114,22 @@ export function parseConfig(content: string): QdConfig {
     checkCommand: stringValue(values.check_command, defaultConfig.checkCommand),
     ciCommand: stringValue(values.ci_command, defaultConfig.ciCommand),
     mergeStrategy: mergeStrategyValue(values.merge_strategy, defaultConfig.mergeStrategy),
-    requireCleanWorktree: booleanValue(values.require_clean_worktree, defaultConfig.requireCleanWorktree),
-    requireGateBeforeCi: booleanValue(values.require_gate_before_ci, defaultConfig.requireGateBeforeCi),
-    requireCiBeforeMerge: booleanValue(values.require_ci_before_merge, defaultConfig.requireCiBeforeMerge),
+    requireCleanWorktree: booleanValue(
+      values.require_clean_worktree,
+      defaultConfig.requireCleanWorktree,
+    ),
+    cleanWorktreeExcept: stringArrayValue(
+      values.clean_worktree_except,
+      defaultConfig.cleanWorktreeExcept,
+    ),
+    requireGateBeforeCi: booleanValue(
+      values.require_gate_before_ci,
+      defaultConfig.requireGateBeforeCi,
+    ),
+    requireCiBeforeMerge: booleanValue(
+      values.require_ci_before_merge,
+      defaultConfig.requireCiBeforeMerge,
+    ),
   };
 }
 
@@ -126,6 +142,7 @@ check_command = "${escapeTomlString(config.checkCommand)}"
 ci_command = "${escapeTomlString(config.ciCommand)}"
 merge_strategy = "${config.mergeStrategy}"
 require_clean_worktree = ${config.requireCleanWorktree}
+clean_worktree_except = [${config.cleanWorktreeExcept.map((item) => `"${escapeTomlString(item)}"`).join(", ")}]
 require_gate_before_ci = ${config.requireGateBeforeCi}
 require_ci_before_merge = ${config.requireCiBeforeMerge}
 `;
@@ -173,7 +190,11 @@ export async function run(db: Database, sql: string, params: unknown[] = []): Pr
   await statement.run(...params);
 }
 
-export async function get<T>(db: Database, sql: string, params: unknown[] = []): Promise<T | undefined> {
+export async function get<T>(
+  db: Database,
+  sql: string,
+  params: unknown[] = [],
+): Promise<T | undefined> {
   const statement = await db.prepare(sql);
   const row = await statement.get(...params);
   return row as T | undefined;
@@ -193,12 +214,20 @@ async function writeIfMissing(filePath: string, content: string): Promise<void> 
   }
 }
 
-function parseTomlValue(value: string): string | boolean | number {
+function parseTomlValue(value: string): string | boolean | number | string[] {
   if (value === "true") return true;
   if (value === "false") return false;
   if (/^-?\d+$/.test(value)) return Number(value);
   if (value.startsWith('"') && value.endsWith('"')) {
     return value.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+  }
+  if (value.startsWith("[") && value.endsWith("]")) {
+    return value
+      .slice(1, -1)
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .map((item) => (item.startsWith('"') && item.endsWith('"') ? item.slice(1, -1) : item));
   }
   return value;
 }
@@ -211,11 +240,18 @@ function booleanValue(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
 }
 
+function stringArrayValue(value: unknown, fallback: string[]): string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string") ? value : fallback;
+}
+
 function numberValue(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
-function mergeStrategyValue(value: unknown, fallback: QdConfig["mergeStrategy"]): QdConfig["mergeStrategy"] {
+function mergeStrategyValue(
+  value: unknown,
+  fallback: QdConfig["mergeStrategy"],
+): QdConfig["mergeStrategy"] {
   return value === "squash" || value === "merge" || value === "rebase" ? value : fallback;
 }
 

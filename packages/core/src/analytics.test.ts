@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { calculateCriticalPath, calculateEta, calculateVelocity } from "./analytics.js";
 import type { GraphSnapshot } from "./types.js";
 
@@ -34,15 +34,31 @@ function fixture(): GraphSnapshot {
       node("c", "C", "ready", 1),
     ],
     edges: [
-      { from_node: "a", to_node: "b", type: "requires", created_at: "2026-06-20T00:00:00.000Z" },
-      { from_node: "done", to_node: "a", type: "requires", created_at: "2026-06-20T00:00:00.000Z" },
+      {
+        from_node: "a",
+        to_node: "b",
+        type: "requires",
+        created_at: "2026-06-20T00:00:00.000Z",
+      },
+      {
+        from_node: "done",
+        to_node: "a",
+        type: "requires",
+        created_at: "2026-06-20T00:00:00.000Z",
+      },
     ],
     findings: [],
     runs: [],
   };
 }
 
-function node(id: string, title: string, status: GraphSnapshot["nodes"][number]["status"], points: number, doneAt: string | null = null) {
+function node(
+  id: string,
+  title: string,
+  status: GraphSnapshot["nodes"][number]["status"],
+  points: number,
+  doneAt: string | null = null,
+) {
   return {
     id,
     title,
@@ -57,6 +73,12 @@ function node(id: string, title: string, status: GraphSnapshot["nodes"][number][
     spec: title,
     acceptance: title,
     validation: null,
+    group_name: null,
+    projects: [],
+    verification: [],
+    audit_focus: [],
+    status_reason: null,
+    check_command: null,
     context: null,
     created_at: "2026-06-20T00:00:00.000Z",
     updated_at: "2026-06-20T00:00:00.000Z",

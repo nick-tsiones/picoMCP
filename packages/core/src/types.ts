@@ -14,14 +14,22 @@ export type NodeStatus =
 export type Priority = "P0" | "P1" | "P2" | "P3";
 export type Risk = "low" | "medium" | "high";
 export type EdgeType = "requires" | "unblocks" | "supersedes" | "related";
-export type RunKind = "implement" | "audit" | "resolve" | "ci" | "merge";
+export type RunKind = "implement" | "audit" | "resolve" | "check" | "ci" | "merge";
 export type FindingStatus = "open" | "resolved" | "promoted" | "dismissed";
+export type VerificationType = "command" | "manual" | "url" | "note";
+
+export interface VerificationEntry {
+  type: VerificationType;
+  value: string;
+}
 
 export interface QdNode {
   id: string;
   title: string;
   kind: NodeKind;
   milestone: string | null;
+  group_name: string | null;
+  projects: string[];
   status: NodeStatus;
   priority: Priority;
   estimate_points: number;
@@ -31,11 +39,28 @@ export interface QdNode {
   spec: string;
   acceptance: string;
   validation: string | null;
+  verification: VerificationEntry[];
+  audit_focus: string[];
   context: string | null;
+  status_reason: string | null;
+  check_command: string | null;
   created_at: string;
   updated_at: string;
   claimed_at: string | null;
   done_at: string | null;
+}
+
+export interface NodeNote {
+  id: string;
+  node_id: string;
+  text: string;
+  created_at: string;
+}
+
+export interface RegistryEntry {
+  name: string;
+  rank?: number;
+  created_at: string;
 }
 
 export interface QdEdge {

@@ -4,14 +4,14 @@ qd is designed for one central orchestrator agent. The orchestrator manages the 
 
 qd is the authoritative DAG ledger and quality gate. It works best when the repo has one canonical command that means "green enough to merge", and when main is kept green after every merge.
 
-During setup, configure that command:
+During setup, configure a fast preflight and the full green gate:
 
 ```sh
-qd config set check-command --value "nix develop -c just ci"
-qd config set ci-command --value "nix develop -c just ci"
+qd config set check-command --value "<fast project check command>"
+qd config set ci-command --value "<full project CI command>"
 ```
 
-Use the project's equivalent if it is not Nix.
+`qd check run` records preflight evidence without making a node mergeable. `qd ci run` is the merge gate.
 
 1. The orchestrator runs `qd doctor`.
 2. The orchestrator inspects `qd status --json`.
@@ -23,7 +23,9 @@ Use the project's equivalent if it is not Nix.
 8. Audit subagents review work; the orchestrator records structured findings.
 9. P0/P1 findings are resolved before CI or merge.
 10. P2/P3 findings are promoted into future nodes after the current node passes.
-11. The orchestrator runs `qd ci run <node>` rather than manually recording a pass.
-12. The orchestrator merges only after qd marks the node mergeable.
+11. The orchestrator runs `qd check run <node>` when a fast preflight is useful.
+12. The orchestrator runs `qd ci run <node>` rather than manually recording a pass.
+13. The orchestrator performs the repo's actual git/GitHub merge through the normal workflow.
+14. The orchestrator records `qd merge <node>` only after qd marks the node mergeable.
 
 Never work a blocked node unless the user explicitly changes the DAG.

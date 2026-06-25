@@ -37,7 +37,7 @@ export const migrations = [
       `create table if not exists runs (
         id text primary key,
         node_id text not null references nodes(id) on delete cascade,
-        kind text not null check (kind in ('implement','audit','resolve','ci','merge')),
+        kind text not null check (kind in ('implement','audit','resolve','check','ci','merge')),
         status text not null,
         worktree_path text,
         agent text,
@@ -68,5 +68,78 @@ export const migrations = [
       `create index if not exists idx_runs_node_kind on runs(node_id, kind)`,
     ],
   },
+  {
+    id: "002_node_metadata",
+    statements: [
+      `alter table nodes add column group_name text`,
+      `alter table nodes add column projects_json text not null default '[]'`,
+      `alter table nodes add column verification_json text not null default '[]'`,
+      `alter table nodes add column audit_focus_json text not null default '[]'`,
+      `alter table nodes add column status_reason text`,
+      `alter table nodes add column check_command text`,
+      `create table if not exists groups (
+        name text primary key,
+        created_at text not null
+      )`,
+      `create table if not exists projects (
+        name text primary key,
+        created_at text not null
+      )`,
+      `create table if not exists milestones (
+        name text primary key,
+        rank integer not null unique,
+        created_at text not null
+      )`,
+      `create table if not exists node_notes (
+        id text primary key,
+        node_id text not null references nodes(id) on delete cascade,
+        text text not null,
+        created_at text not null
+      )`,
+      `create index if not exists idx_nodes_group on nodes(group_name)`,
+      `create index if not exists idx_node_notes_node on node_notes(node_id)`,
+    ],
+  },
+  {
+    id: "003_check_runs",
+    statements: [
+      `alter table findings rename to findings_old`,
+      `alter table runs rename to runs_old`,
+      `create table runs (
+        id text primary key,
+        node_id text not null references nodes(id) on delete cascade,
+        kind text not null check (kind in ('implement','audit','resolve','check','ci','merge')),
+        status text not null,
+        worktree_path text,
+        agent text,
+        started_at text not null,
+        finished_at text,
+        summary text,
+        log_path text
+      )`,
+      `insert into runs (id, node_id, kind, status, worktree_path, agent, started_at, finished_at, summary, log_path)
+        select id, node_id, kind, status, worktree_path, agent, started_at, finished_at, summary, log_path from runs_old`,
+      `create table findings (
+        id text primary key,
+        node_id text not null references nodes(id) on delete cascade,
+        run_id text references runs(id) on delete set null,
+        severity text not null check (severity in ('P0','P1','P2','P3')),
+        status text not null check (status in ('open','resolved','promoted','dismissed')),
+        title text not null,
+        path text,
+        line integer,
+        evidence text not null,
+        expected text,
+        suggested_fix text,
+        created_at text not null,
+        resolved_at text
+      )`,
+      `insert into findings (id, node_id, run_id, severity, status, title, path, line, evidence, expected, suggested_fix, created_at, resolved_at)
+        select id, node_id, run_id, severity, status, title, path, line, evidence, expected, suggested_fix, created_at, resolved_at from findings_old`,
+      `drop table runs_old`,
+      `drop table findings_old`,
+      `create index if not exists idx_runs_node_kind on runs(node_id, kind)`,
+      `create index if not exists idx_findings_node_status_severity on findings(node_id, status, severity)`,
+    ],
+  },
 ] as const;
-

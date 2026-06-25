@@ -7,18 +7,25 @@ qd does not run agents or decide where subagents execute. The intended model is 
 ## Install For Development
 
 ```sh
+curl -fsSL https://vite.plus | bash
+vp help
 nix develop
 just install
-just build
+just ci
 ```
 
-The Nix shell provides Node 24, git, gh, just, and Corepack-managed pnpm in `.corepack/bin`.
+The Nix shell provides Node 24, git, gh, just, and Corepack-managed pnpm. Project commands run through Vite+ (`vp`), including Oxfmt, Oxlint, Vitest, tsdown, and the TS7/native `tsgo` check lane.
 
 ## Quickstart
 
 ```sh
 qd setup
-qd config set ci-command --value "nix develop -c just ci"
+qd agent install skills-sh
+qd config set check-command --value "vp check"
+qd config set ci-command --value "vp run ci"
+qd config get ci-command
+qd group register --name runtime
+qd milestone register --name baseline --rank 10
 qd node add --id scaffold --title "Scaffold project" --spec "Create the project skeleton." --acceptance "The project builds."
 qd ready
 qd claim scaffold --agent codex
@@ -32,6 +39,15 @@ qd stats
 qd critical-path
 qd eta
 ```
+
+For an existing roadmap, import instead of hand-entering nodes:
+
+```sh
+qd import --from roadmap/spec-dag.json --schema-mapping roadmap/qd-import-map.json
+qd validate
+```
+
+`qd merge` records qd state only. It does not run git or GitHub merges; keep using the repo's normal merge workflow and use qd to enforce the DAG, audit, and green-CI gate.
 
 Start the read-only viewer:
 

@@ -1,6 +1,6 @@
 # Quick DAG Orchestrator Bootstrap
 
-Quick DAG (`qdcli`) is a CLI for orchestrator-led agentic software work. It does not run agents. It gives one central orchestrator agent a durable DAG ledger for specs, dependency edges, claims, audits, findings, CI state, merge state, velocity, critical path, and ETA.
+Quick DAG (`qdcli`, executable `qd`) is a CLI for orchestrator-led agentic software work. It does not run agents and it is not tied to any language, framework, package manager, CI vendor, or hosting model. It gives one central orchestrator agent a durable DAG ledger for specs, dependency edges, claims, audits, findings, check/CI state, merge state, velocity, critical path, and ETA.
 
 The intended model:
 
@@ -13,47 +13,42 @@ The intended model:
 
 ## Install
 
-From the project that wants to use Quick DAG, install or clone `qdcli` from:
+From the project that wants to use Quick DAG, make sure the `qd` executable is available. The source repository is:
 
 ```text
 https://github.com/cat-cave/qdcli
 ```
 
-For local development from a clone:
+If `qd` is not available, follow the install instructions in that repository, then verify:
 
 ```sh
-nix develop
-just install
-just build
+qd --version
 ```
-
-Use the built CLI as `qd`.
 
 ## Setup In The Target Repo
 
-Run:
+Run from the repository that will use qd:
 
 ```sh
 qd setup
 qd agent install skills-sh
 ```
 
-Configure the repository's real definition of "green":
+Before creating work, configure the repository's real commands:
 
 ```sh
 qd config set check-command --value "<fast local check command>"
 qd config set ci-command --value "<full green command>"
 qd config set merge-strategy --value "squash"
+qd config get ci-command
 ```
 
-For Nix projects, a good default is:
+Pick commands by meaning, not by tool name:
 
-```sh
-qd config set check-command --value "nix develop -c just ci"
-qd config set ci-command --value "nix develop -c just ci"
-```
+- `check_command` is a fast preflight used by `qd check run <node>`. It should catch obvious breakage before an auditor or resolver spends more time on the node. A passed check is useful evidence, but it does not make a node mergeable.
+- `ci_command` is the full trusted gate used by `qd ci run <node>`. It should be the command the project relies on before merge. A passed CI run moves the node to `mergeable`; qd merge requires that latest pass by default.
 
-The configured CI command should run the checks the project actually trusts before merge: formatting, lint, typecheck, tests, build, schema/architecture checks, and any repo-specific gates.
+The two commands may be the same for small projects. They should be different when the project has a cheap preflight and a slower complete gate.
 
 ## Validate Setup
 
@@ -78,6 +73,27 @@ qd node add --id <id> --title "<title>" --spec "<spec>" --acceptance "<acceptanc
 qd edge add <dependency-node> <blocked-node>
 qd validate
 qd graph --format mermaid
+```
+
+For existing projects, import the roadmap instead of manually adding hundreds of nodes:
+
+```sh
+qd import --from roadmap/spec-dag.json --schema-mapping roadmap/qd-import-map.json
+qd validate
+```
+
+Use registered metadata when the project has real scheduling lanes, product areas, or strict milestone ordering:
+
+```sh
+qd group register --name "runtime"
+qd project register --name "web"
+qd milestone register --name "baseline" --rank 10
+qd node add --id <id> --title "<title>" --spec "<spec>" --acceptance "<acceptance>" \
+  --group "runtime" \
+  --project "web" \
+  --milestone "baseline" \
+  --verify type=command,value="<node-specific verification command>" \
+  --audit-focus "Check the risky path and failure states."
 ```
 
 Rules:
@@ -113,6 +129,7 @@ Record findings as structured state:
 
 ```sh
 qd finding add <node> --severity P1 --title "<issue>" --evidence "<evidence>"
+qd finding add <node> --from-report roadmap/audit-report.json
 qd finding resolve <finding-id>
 ```
 
@@ -136,19 +153,24 @@ Normal path:
 
 ```sh
 qd gate <node>
+qd check run <node>
 qd ci run <node>
 qd merge <node>
 ```
 
 `qd ci run` runs the configured `ci_command`, streams output, writes a log under `.qd/logs/`, records pass/fail, and moves the node to `mergeable` or `blocked`.
 
-Do not use `qd ci pass` unless recording a check that was already completed outside qd.
+`qd check run` runs the configured `check_command` or the node's `check_command` override. It records a check run and log, but it does not mark the node mergeable. If the check fails, qd blocks the node.
+
+Do not use `qd ci pass` unless recording a full CI gate that was already completed outside qd.
 
 `qd merge` records the merge only after qd confirms:
 
 - no open P0/P1 findings
 - node is `mergeable`
 - latest CI run passed, when `require_ci_before_merge = true`
+
+`qd merge` does not perform a git merge, squash, rebase, push, or GitHub PR operation. The orchestrator should use the repo's normal merge workflow for git state, and use `qd merge` to record that the node cleared qd's gate. Keep main green; do not use qd to excuse a known-bad merge.
 
 ## Inspect Progress
 
@@ -179,4 +201,3 @@ For a first adoption trial, get one real but low-risk node from ready to done:
 8. merge only after qd marks it mergeable
 
 If the graph is wrong, fix the graph. Do not bypass the ready queue.
-
