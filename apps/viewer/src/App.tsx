@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import type { GraphSnapshot, QdNode } from "@qdcli/core";
+import type { AnalyticsReport, GraphSnapshot, QdNode } from "@qdcli/core";
 import "./styles.css";
 
 function App() {
   const [snapshot, setSnapshot] = useState<GraphSnapshot | null>(null);
+  const [analytics, setAnalytics] = useState<AnalyticsReport | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
 
   useEffect(() => {
@@ -15,6 +16,10 @@ function App() {
         setSelected(data.nodes[0]?.id ?? null);
       })
       .catch(() => setSnapshot({ nodes: [], edges: [], findings: [], runs: [] }));
+    fetch("/api/analytics")
+      .then((response) => response.json())
+      .then((data: AnalyticsReport) => setAnalytics(data))
+      .catch(() => setAnalytics(null));
   }, []);
 
   const node = snapshot?.nodes.find((item) => item.id === selected) ?? null;
@@ -40,7 +45,7 @@ function App() {
           <h1>Quick DAG</h1>
           <p>{snapshot.nodes.length} nodes · {snapshot.edges.length} edges · {ready.length} ready</p>
         </div>
-        <StatusSummary nodes={snapshot.nodes} />
+        <StatusSummary nodes={snapshot.nodes} analytics={analytics} />
       </section>
 
       <section className="layout">
@@ -55,6 +60,13 @@ function App() {
         </aside>
 
         <section className="graph">
+          {analytics ? (
+            <div className="metrics">
+              <span>Velocity {analytics.velocity.pointsPerDay.toFixed(2)} pts/day</span>
+              <span>Critical path {analytics.criticalPath.criticalPathPoints} pts</span>
+              <span>ETA {analytics.eta.etaDays === null ? "unknown" : `${analytics.eta.etaDays.toFixed(1)} days`}</span>
+            </div>
+          ) : null}
           {snapshot.nodes.map((item) => (
             <button
               key={item.id}
@@ -74,7 +86,7 @@ function App() {
   );
 }
 
-function StatusSummary({ nodes }: { nodes: QdNode[] }) {
+function StatusSummary({ nodes, analytics }: { nodes: QdNode[]; analytics: AnalyticsReport | null }) {
   const statuses = [...new Set(nodes.map((node) => node.status))];
   return (
     <div className="statusSummary">
@@ -83,6 +95,7 @@ function StatusSummary({ nodes }: { nodes: QdNode[] }) {
           {status}: {nodes.filter((node) => node.status === status).length}
         </span>
       ))}
+      {analytics ? <span>remaining: {analytics.eta.remainingPoints} pts</span> : null}
     </div>
   );
 }
@@ -116,4 +129,3 @@ function NodeDetail({ node, snapshot }: { node: QdNode; snapshot: GraphSnapshot 
 }
 
 createRoot(document.getElementById("root")!).render(<App />);
-

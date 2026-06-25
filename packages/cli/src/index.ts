@@ -5,11 +5,14 @@ import {
   addEdge,
   addFinding,
   addNode,
+  analyticsReport,
   cancelNode,
   ciFail,
   ciPass,
   claimNode,
   completeNode,
+  criticalPathReport,
+  etaReport,
   getProjectPaths,
   gateNode,
   getNode,
@@ -29,6 +32,7 @@ import {
   stats,
   updateNode,
   validateGraph,
+  velocityReport,
   writeConfig,
   type QdConfig,
   type EdgeType,
@@ -114,11 +118,21 @@ async function main(): Promise<void> {
     case "plan":
       return planCommand(root, action, args.options, json);
     case "milestone":
-      return output(await stats(root), json);
+      return milestoneCommand(root, action, args.options, json);
     case "velocity":
+      return output(await velocityReport(root, numberOpt(args.options.window) ?? 7), json);
+    case "critical-path":
+      return output(await criticalPathReport(root, stringOpt(args.options.milestone) ?? null), json);
     case "eta":
+      return output(await etaReport(root, stringOpt(args.options.milestone) ?? null, numberOpt(args.options.window) ?? 7), json);
     case "stats":
-      return output(await stats(root), json);
+      return output(
+        await analyticsReport(root, {
+          milestone: stringOpt(args.options.milestone) ?? null,
+          windowDays: numberOpt(args.options.window) ?? 7,
+        }),
+        json,
+      );
     case "prompt":
       return promptCommand(root, action, extra);
     case "agent":
@@ -335,6 +349,24 @@ async function planCommand(
     throw new Error("qd plan import is reserved for the next trial iteration; use qd node add and qd edge add for now");
   }
   throw new Error(`Unknown plan action: ${action}`);
+}
+
+async function milestoneCommand(
+  root: string,
+  action: string | undefined,
+  options: Record<string, string | boolean>,
+  json: boolean,
+): Promise<void> {
+  if (action === "status" || !action) {
+    return output(
+      await analyticsReport(root, {
+        milestone: stringOpt(options.milestone) ?? null,
+        windowDays: numberOpt(options.window) ?? 7,
+      }),
+      json,
+    );
+  }
+  throw new Error(`Unknown milestone action: ${action}`);
 }
 
 async function promptCommand(root: string, action: string | undefined, id: string | undefined): Promise<void> {
@@ -588,8 +620,12 @@ Core:
   qd setup
   qd doctor [--json]
   qd status [--json]
+  qd stats [--json] [--window 7] [--milestone <name>]
   qd ready [--json]
   qd graph --format table|json|mermaid|dot
+  qd velocity [--window 7]
+  qd critical-path [--milestone <name>]
+  qd eta [--window 7] [--milestone <name>]
   qd config show
   qd config set check-command --value "nix develop -c just ci"
 

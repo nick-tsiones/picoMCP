@@ -81,3 +81,41 @@ export interface GraphSnapshot {
   runs: QdRun[];
 }
 
+export interface VelocityReport {
+  windowDays: number;
+  completedNodes: number;
+  completedPoints: number;
+  pointsPerDay: number;
+  averageCycleHours: number | null;
+}
+
+export interface CriticalPathNode {
+  id: string;
+  title: string;
+  status: NodeStatus;
+  estimatePoints: number;
+  remainingPoints: number;
+}
+
+export interface CriticalPathReport {
+  milestone: string | null;
+  totalRemainingPoints: number;
+  criticalPathPoints: number;
+  criticalPath: CriticalPathNode[];
+}
+
+export interface EtaReport {
+  milestone: string | null;
+  remainingPoints: number;
+  velocityPointsPerDay: number;
+  etaDays: number | null;
+  etaDate: string | null;
+  criticalPathPoints: number;
+}
+
+export interface AnalyticsReport {
+  stats: Record<string, unknown>;
+  velocity: VelocityReport;
+  criticalPath: CriticalPathReport;
+  eta: EtaReport;
+}

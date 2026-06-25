@@ -11,6 +11,7 @@ Use this guide to trial qdcli on a new project.
 7. Run `qd validate`.
 8. Work one ready node end to end.
 9. Use `qd ci run <node>` for the check gate.
-10. Start `qd view` to inspect topology and readiness.
+10. Run `qd stats`, `qd critical-path`, and `qd eta` to inspect planning signal.
+11. Start `qd view` to inspect topology, readiness, velocity, critical path, and ETA.
 
 The first trial is successful when one node moves from ready to done through claim, complete, audit, gate, CI pass, and merge.

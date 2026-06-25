@@ -536,6 +536,7 @@ export async function validateGraph(root: string): Promise<ValidationResult> {
 export async function stats(root: string): Promise<Record<string, unknown>> {
   const nodes = await listNodes(root);
   const ready = await readyNodes(root);
+  const snapshot = await graphSnapshot(root);
   const byStatus = Object.fromEntries(
     [...new Set(nodes.map((node) => node.status))].map((status) => [
       status,
@@ -553,6 +554,9 @@ export async function stats(root: string): Promise<Record<string, unknown>> {
     donePoints,
     totalPoints,
     remainingPoints: totalPoints - donePoints,
+    openP0P1Findings: snapshot.findings.filter(
+      (finding) => finding.status === "open" && (finding.severity === "P0" || finding.severity === "P1"),
+    ).length,
   };
 }
 

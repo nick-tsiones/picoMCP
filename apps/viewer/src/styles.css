@@ -102,6 +102,22 @@ button {
   padding: 18px;
 }
 
+.metrics {
+  background: #ffffff;
+  border: 1px solid #dce3e6;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  padding: 12px;
+}
+
+.metrics span {
+  color: #334149;
+  font-weight: 650;
+}
+
 .node {
   background: #ffffff;
   border: 1px solid #ccd6da;
@@ -164,4 +180,3 @@ dd {
     border: 0;
   }
 }
-

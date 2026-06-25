@@ -28,6 +28,9 @@ qd audit start scaffold
 qd gate scaffold
 qd ci run scaffold
 qd merge scaffold
+qd stats
+qd critical-path
+qd eta
 ```
 
 Start the read-only viewer:

@@ -1,6 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import { graphSnapshot } from "@qdcli/core";
+import { analyticsReport, graphSnapshot } from "@qdcli/core";
 
 export default defineConfig({
   plugins: [
@@ -19,8 +19,18 @@ export default defineConfig({
             res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
           }
         });
+        server.middlewares.use("/api/analytics", async (_req, res) => {
+          try {
+            const root = process.env.QD_ROOT ?? process.cwd();
+            const report = await analyticsReport(root);
+            res.setHeader("content-type", "application/json");
+            res.end(JSON.stringify(report));
+          } catch (error) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
+          }
+        });
       },
     },
   ],
 });
-

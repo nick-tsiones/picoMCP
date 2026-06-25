@@ -6,8 +6,13 @@
 - `qd setup`
 - `qd doctor [--json]`
 - `qd status [--json]`
+- `qd stats [--json] [--window 7] [--milestone <name>]`
 - `qd ready [--json]`
 - `qd graph --format table|json|mermaid|dot`
+- `qd velocity [--window 7]`
+- `qd critical-path [--milestone <name>]`
+- `qd eta [--window 7] [--milestone <name>]`
+- `qd milestone status [--milestone <name>]`
 - `qd config show [--json]`
 - `qd config set check-command --value <command>`
 - `qd config set ci-command --value <command>`
