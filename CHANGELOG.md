@@ -2,6 +2,10 @@
 
 All notable qdcli changes are recorded here.
 
+## v0.1.5 - 2026-06-26
+
+- Publish npm tarballs from absolute workflow paths so npm treats them as local package files, not GitHub shorthand specs.
+
 ## v0.1.4 - 2026-06-26
 
 - Fix Trusted Publishing tarball paths so workflow-packed npm artifacts are published from the repository workspace instead of an unresolved glob.
