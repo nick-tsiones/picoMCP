@@ -1,5 +1,13 @@
 # @cat-cave/qdcli
 
+## 0.1.10
+
+### Patch Changes
+
+- Replace the installed qd viewer list with an interactive DAG map with zoom, filtering, live refresh, focus highlighting, and richer node detail panels.
+- Updated dependencies
+  - @cat-cave/qdcli-core@0.1.10
+
 ## 0.1.9
 
 ### Patch Changes
