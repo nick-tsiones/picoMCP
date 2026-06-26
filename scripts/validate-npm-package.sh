@@ -12,7 +12,10 @@ prefix="$tmpdir/prefix"
 npm install --prefix "$prefix" "$tmpdir"/*.tgz
 
 qd="$prefix/node_modules/.bin/qd"
-"$qd" --version
+expected_version="$(node -e 'console.log(require(process.argv[1] + "/packages/cli/package.json").version)' "$repo_root")"
+actual_version="$("$qd" --version)"
+test "$actual_version" = "$expected_version"
+printf '%s\n' "$actual_version"
 
 project="$tmpdir/project"
 mkdir -p "$project"
@@ -35,4 +38,3 @@ JSON
 "$qd" node add --from-json node.json --json
 "$qd" finding list --json
 "$qd" export --out roadmap/spec-dag.json --json
-

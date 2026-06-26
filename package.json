@@ -1,11 +1,12 @@
 {
   "name": "qdcli-workspace",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "vp run -r build",
-    "ci": "vp check && vp test && vp run typecheck:tsgo && vp run -r build",
+    "ci": "vp check && vp test run --coverage && vp run typecheck:tsgo && vp run -r build",
+    "coverage": "vp test run --coverage",
     "dev:view": "vp run @qdcli/viewer#dev",
     "format": "vp fmt --write .",
     "format:check": "vp fmt --check .",
@@ -25,6 +26,7 @@
     "@types/react-dom": "^19.2.3",
     "@typescript/native-preview": "7.0.0-dev.20260624.1",
     "@vitejs/plugin-react": "^6.0.3",
+    "@vitest/coverage-v8": "^4.1.9",
     "typescript": "^6.0.3",
     "vite": "catalog:",
     "vite-plus": "catalog:",

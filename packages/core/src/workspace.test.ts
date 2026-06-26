@@ -71,6 +71,27 @@ describe("workspace roll-up", () => {
     expect(graph.snapshots.map((entry) => entry.snapshot.nodes.length)).toEqual([2, 2]);
   });
 
+  it("reads workspace configs with comments and whitespace", async () => {
+    await writeFile(
+      configPath,
+      `
+        # local orchestration fleet
+        repos = [
+          "${repoA}", # primary app
+          "${repoB}"
+        ]
+      `,
+      "utf8",
+    );
+
+    const ready = await workspaceReady({ configPath });
+
+    expect(ready.map((node) => `${node.repo}:${node.id}`).sort()).toEqual([
+      "repo-a:a-1",
+      "repo-b:b-1",
+    ]);
+  });
+
   it("reports missing repo databases without creating them", async () => {
     const missing = path.join(root, "missing");
     await mkdir(missing, { recursive: true });

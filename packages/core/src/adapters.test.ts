@@ -30,6 +30,27 @@ describe("import adapters", () => {
     ]);
   });
 
+  it("falls back to paragraph text and preserves duplicate roadmap titles with suffixes", () => {
+    const output = adaptImportSource(
+      "roadmap-html",
+      `
+      <article class="blocked">
+        <h3>Review API &amp; Docs</h3>
+        <p>Audit &lt;public&gt; API docs.</p>
+      </article>
+      <article>
+        <h3>Review API &amp; Docs</h3>
+        <p>Publish the docs follow-up.</p>
+      </article>
+    `,
+    );
+
+    expect(output.nodes.map((node) => [node.id, node.status, node.spec])).toEqual([
+      ["review-api-docs", "blocked", "Audit <public> API docs."],
+      ["review-api-docs-2", "ready", "Publish the docs follow-up."],
+    ]);
+  });
+
   it("normalizes markdown checklists", () => {
     const output = adaptImportSource(
       "markdown-checklist",
@@ -49,6 +70,25 @@ describe("import adapters", () => {
     expect(output.edges).toEqual([
       { from_node: "bootstrap-runtime", to_node: "wire-agent", type: "requires" },
     ]);
+  });
+
+  it("folds multiple markdown details into a multiline spec", () => {
+    const output = adaptImportSource(
+      "markdown-checklist",
+      `
+      - [ ] Wire \`Agent\`
+        - Add runtime connection
+        - Preserve audit trail
+        - done when: Agent responds
+    `,
+    );
+
+    expect(output.nodes[0]).toMatchObject({
+      id: "wire-agent",
+      title: "Wire Agent",
+      spec: "Add runtime connection\nPreserve audit trail",
+      acceptance: "Agent responds",
+    });
   });
 
   it("fails when roadmap html dependencies reference unknown nodes", () => {

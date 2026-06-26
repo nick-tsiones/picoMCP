@@ -1,6 +1,8 @@
 import { appendFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import {
   addEdge,
   addFinding,
@@ -73,7 +75,7 @@ async function main(): Promise<void> {
   const json = Boolean(args.options.json);
 
   if (args.options.version || group === "version" || group === "--version" || group === "-v") {
-    console.log("0.1.0");
+    console.log(cliVersion());
     return;
   }
 
@@ -2286,6 +2288,18 @@ function safeId(id: string): string {
 
 function findWorkspaceRoot(): string {
   return path.resolve(new URL("../../..", import.meta.url).pathname);
+}
+
+function cliVersion(): string {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const packagePath = path.join(here, "..", "package.json");
+  try {
+    const parsed = JSON.parse(readFileSync(packagePath, "utf8")) as { version?: unknown };
+    if (typeof parsed.version === "string" && parsed.version.trim()) return parsed.version;
+  } catch {
+    // Development builds without a package manifest should not report a stale release.
+  }
+  return "0.0.0-dev";
 }
 
 function helpText(): string {

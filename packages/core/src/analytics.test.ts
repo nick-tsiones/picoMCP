@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
-import { calculateCriticalPath, calculateEta, calculateVelocity } from "./analytics.js";
+import {
+  calculateCriticalPath,
+  calculateEta,
+  calculateStats,
+  calculateVelocity,
+} from "./analytics.js";
 import type { GraphSnapshot } from "./types.js";
 
 describe("analytics", () => {
@@ -22,6 +27,54 @@ describe("analytics", () => {
     expect(velocity.pointsPerDay).toBe(2);
     expect(eta.etaDays).toBe(2.5);
     expect(eta.criticalPathPoints).toBe(5);
+  });
+
+  it("returns null ETA when no recent velocity exists", () => {
+    const now = new Date("2026-07-25T00:00:00.000Z");
+    const eta = calculateEta(fixture(), null, 5, now);
+
+    expect(eta.velocityPointsPerDay).toBe(0);
+    expect(eta.etaDays).toBeNull();
+    expect(eta.etaDate).toBeNull();
+  });
+
+  it("scopes critical path reports to a milestone", () => {
+    const snapshot = fixture();
+    snapshot.nodes = snapshot.nodes.map((node) => ({
+      ...node,
+      milestone: node.id === "c" ? "later" : "baseline",
+    }));
+
+    const report = calculateCriticalPath(snapshot, "later");
+
+    expect(report.milestone).toBe("later");
+    expect(report.totalRemainingPoints).toBe(1);
+    expect(report.criticalPath.map((node) => node.id)).toEqual(["c"]);
+  });
+
+  it("counts ready nodes and open blocking findings in stats", () => {
+    const snapshot = fixture();
+    snapshot.findings.push({
+      id: "finding-1",
+      node_id: "a",
+      run_id: null,
+      severity: "P1",
+      status: "open",
+      title: "Blocking finding",
+      path: null,
+      line: null,
+      evidence: "A blocking issue remains.",
+      expected: null,
+      suggested_fix: null,
+      created_at: "2026-06-24T00:00:00.000Z",
+      resolved_at: null,
+    });
+
+    const stats = calculateStats(snapshot);
+
+    expect(stats.ready).toBe(2);
+    expect(stats.openP0P1Findings).toBe(1);
+    expect(stats.remainingPoints).toBe(6);
   });
 });
 

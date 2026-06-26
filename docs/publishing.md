@@ -26,15 +26,14 @@ The first publish for each scoped package must be public.
 Run:
 
 ```sh
-nix develop -c just ci
-nix develop -c just pack
-nix develop -c just npm-smoke
-nix develop -c just mutation
+nix develop -c just release-check
 ```
+
+`just release-check` runs the full CI gate, npm tarball smoke, and Stryker mutation ratchet.
 
 `just npm-smoke` packs the actual core and CLI tarballs, installs them into a temporary npm prefix, and runs the installed `qd` binary through setup, doctor, JSON node creation, finding list, and export.
 
-`just mutation` runs Stryker against `packages/core/src/**/*.ts` with Vitest and the TypeScript checker. The initial release ratchet is `thresholds.break = 45`, set from the first full-core baseline and intended to rise as surviving mutants are intentionally killed.
+`just mutation` runs Stryker against `packages/core/src/**/*.ts` with Vitest and the TypeScript checker. The current release ratchet is `thresholds.break = 55`, and it should only rise after tests kill enough mutants to earn the higher threshold.
 
 ## Publish Order
 
@@ -69,11 +68,13 @@ Configure each package on npmjs.com under package Settings -> Trusted Publishing
 
 The workflow validates the repo, packs the core and CLI tarballs with pnpm so workspace dependencies are rewritten, then publishes those tarballs with npm's OIDC trusted publisher flow.
 
-To release a new version:
+To prepare a release:
 
 ```sh
-nix develop -c corepack pnpm -r version patch
-git commit -am "Release v0.1.1"
-git tag v0.1.1
-git push origin main --tags
+nix develop -c just release-bump patch
+nix develop -c just release-check
+nix develop -c just release-tag
+nix develop -c just release-push
 ```
+
+`just release-bump` accepts `patch`, `minor`, `major`, or an exact `x.y.z` version. It updates the workspace package versions together, prepends `CHANGELOG.md`, and refreshes `pnpm-lock.yaml`. `just release-tag` commits the prepared release and creates `v<version>`. `just release-push` pushes `main` and the exact version tag, which triggers `.github/workflows/publish.yml` through npm Trusted Publishing.

@@ -7,13 +7,18 @@ import {
   addFinding,
   addNodeNote,
   addNode,
+  claimNode,
+  ciFail,
   ciPass,
   gateNode,
   graphSnapshot,
+  latestRun,
   listFindings,
+  listNodeNotes,
   listRuns,
   markMerged,
   promoteFindings,
+  recordCiResult,
   recordCheckResult,
   readyNodes,
   registerGroup,
@@ -24,6 +29,8 @@ import {
   resolveFinding,
   setupProject,
   startRun,
+  updateNode,
+  validateGraph,
 } from "./index.js";
 
 let root: string;
@@ -156,6 +163,84 @@ describe("graph lifecycle", () => {
     expect(merged.status).toBe("done");
   });
 
+  it("claims the highest priority ready node with the requested branch", async () => {
+    await addNode(root, {
+      id: "slow",
+      title: "Slow task",
+      priority: "P3",
+      estimatePoints: 5,
+      spec: "Do slow work",
+      acceptance: "Slow work is done",
+    });
+    await addNode(root, {
+      id: "urgent",
+      title: "Urgent task",
+      priority: "P1",
+      estimatePoints: 3,
+      spec: "Do urgent work",
+      acceptance: "Urgent work is done",
+    });
+
+    const claimed = await claimNode(root, { agent: "orchestrator", branch: "spec/urgent" });
+
+    expect(claimed.id).toBe("urgent");
+    expect(claimed.status).toBe("claimed");
+    expect(claimed.owner).toBe("orchestrator");
+    expect(claimed.branch).toBe("spec/urgent");
+    await expect(claimNode(root, { id: "urgent", agent: "other" })).rejects.toThrow(/not ready/);
+  });
+
+  it("records failed check and CI runs without marking the node mergeable", async () => {
+    await addNode(root, {
+      id: "a",
+      title: "Build A",
+      spec: "Do A",
+      acceptance: "A works",
+    });
+
+    const afterCheck = await recordCheckResult(root, "a", {
+      status: "failed",
+      summary: "check failed",
+      logPath: "logs/check.txt",
+    });
+    expect(afterCheck.status).toBe("blocked");
+    expect(await latestRun(root, "a", "check")).toMatchObject({
+      status: "failed",
+      summary: "check failed",
+      log_path: "logs/check.txt",
+    });
+
+    const afterCi = await recordCiResult(root, "a", {
+      status: "failed",
+      summary: "ci failed",
+      logPath: "logs/ci.txt",
+    });
+    expect(afterCi.status).toBe("blocked");
+    expect(await latestRun(root, "a", "ci")).toMatchObject({
+      status: "failed",
+      summary: "ci failed",
+      log_path: "logs/ci.txt",
+    });
+    await expect(markMerged(root, "a", "squash")).rejects.toThrow(/status blocked/);
+  });
+
+  it("records CI failure through the shorthand helper", async () => {
+    await addNode(root, {
+      id: "a",
+      title: "Build A",
+      spec: "Do A",
+      acceptance: "A works",
+    });
+
+    const failed = await ciFail(root, "a", "pipeline failed");
+
+    expect(failed.status).toBe("blocked");
+    expect(await latestRun(root, "a", "ci")).toMatchObject({
+      status: "failed",
+      summary: "pipeline failed",
+    });
+  });
+
   it("records check runs without making the node mergeable", async () => {
     await addNode(root, {
       id: "a",
@@ -171,6 +256,31 @@ describe("graph lifecycle", () => {
 
     expect(checked.status).toBe("ready");
     await expect(markMerged(root, "a", "squash")).rejects.toThrow(/status ready/);
+  });
+
+  it("appends node notes to status reason and lists them oldest first", async () => {
+    await addNode(root, {
+      id: "a",
+      title: "Build A",
+      statusReason: "Initial note",
+      spec: "Do A",
+      acceptance: "A works",
+    });
+
+    await addNodeNote(root, "a", "Blocked by upstream API");
+    await addNodeNote(root, "a", "Retry passed locally");
+
+    const notes = await listNodeNotes(root, "a");
+    const node = await graphSnapshot(root).then((snapshot) =>
+      snapshot.nodes.find((candidate) => candidate.id === "a"),
+    );
+    expect(notes.map((note) => note.text)).toEqual([
+      "Blocked by upstream API",
+      "Retry passed locally",
+    ]);
+    expect(node?.status_reason).toContain("Initial note");
+    expect(node?.status_reason).toContain("Blocked by upstream API");
+    expect(node?.status_reason).toContain("Retry passed locally");
   });
 
   it("enforces registered group, project, and milestone values", async () => {
@@ -249,6 +359,57 @@ describe("graph lifecycle", () => {
     } finally {
       await rm(restoredRoot, { recursive: true, force: true });
     }
+  });
+
+  it("rejects invalid restore snapshots before mutating the local cache", async () => {
+    await addNode(root, {
+      id: "a",
+      title: "Build A",
+      spec: "Do A",
+      acceptance: "A works",
+    });
+    const snapshot = await graphSnapshot(root);
+    const restoredRoot = await mkdtemp(path.join(os.tmpdir(), "qdcli-restore-invalid-"));
+    try {
+      await setupProject(restoredRoot);
+      await expect(
+        restoreGraphSnapshot(restoredRoot, {
+          ...snapshot,
+          schema_version: 2,
+        }),
+      ).rejects.toThrow(/Unsupported qd export/);
+      await expect(
+        restoreGraphSnapshot(restoredRoot, {
+          ...snapshot,
+          edges: [
+            {
+              from_node: "missing",
+              to_node: "a",
+              type: "requires",
+              created_at: "2026-06-20T00:00:00.000Z",
+            },
+          ],
+        }),
+      ).rejects.toThrow(/missing from node/);
+      expect((await graphSnapshot(restoredRoot)).nodes).toHaveLength(0);
+    } finally {
+      await rm(restoredRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("surfaces validation warnings for unblocked blocked nodes", async () => {
+    await addNode(root, {
+      id: "a",
+      title: "Build A",
+      spec: "Do A",
+      acceptance: "A works",
+    });
+    await updateNode(root, "a", { status: "blocked" });
+
+    const validation = await validateGraph(root);
+
+    expect(validation.ok).toBe(true);
+    expect(validation.warnings).toEqual(["a: blocked node has no incomplete dependencies"]);
   });
 
   it("resolves the nearest ancestor qd root", async () => {
