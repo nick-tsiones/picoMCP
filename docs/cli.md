@@ -14,6 +14,7 @@ If neither is set, qd uses the nearest ancestor `.qd/` directory. If no ancestor
 - `qd doctor [--json]`
 - `qd status [--json]`
 - `qd stats [--json] [--window 7] [--milestone <name>]`
+- `qd snapshot [--json] [--milestone <name>]`
 - `qd ready [--json]`
 - `qd graph --format table|json|mermaid|dot`
 - `qd export [--out <json>]`
@@ -26,6 +27,7 @@ If neither is set, qd uses the nearest ancestor `.qd/` directory. If no ancestor
 - `qd config get <key>`
 - `qd config set check-command --value <command>`
 - `qd config set ci-command --value <command>`
+- `qd prompt plan|implement|audit|resolve [node] [--json]`
 - `qd workspace status|ready|graph [--json] [--config <toml>] [--repo <path>]`
 
 Config read/write round trip:
@@ -34,6 +36,8 @@ Config read/write round trip:
 qd config set ci-command --value "<full project CI command>"
 qd config get ci-command
 ```
+
+For agent-facing JSON output, see [JSON Contract](./json.md).
 
 ## Import
 

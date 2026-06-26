@@ -93,6 +93,8 @@ qd import --from roadmap/spec-dag.json
 
 Use that export/import path when moving between machines, worktrees, or remote execution hosts. qd resolves \`--root\`, then \`QD_ROOT\`, then the nearest ancestor \`.qd/\`, so commands can be run from subdirectories after setup.
 
+Use \`qd snapshot --json\` when the orchestrator needs a compact state refresh with status, ready nodes, open findings, and critical path. Use \`qd prompt implement <id> --json\` when delegating so the subagent gets both the prompt text and structured node context.
+
 For a multi-repo view, use \`qd workspace status --json\`, \`qd workspace ready --json\`, and \`qd workspace graph --json\` as read-only planning tools. Workspace roll-up is not a distributed executor; it helps the orchestrator choose where to focus, then normal qd commands run inside the target repo.
 
 For mature projects, import existing DAG state instead of recreating it manually:
