@@ -35,16 +35,40 @@ nix develop -c just release-check
 
 `just mutation` runs Stryker against `packages/core/src/**/*.ts` with Vitest and the TypeScript checker. The current release ratchet is `thresholds.break = 55`, and it should only rise after tests kill enough mutants to earn the higher threshold.
 
-## Publish Order
+## Changesets Release Flow
 
-For a local bootstrap or emergency manual publish, publish core first, then CLI:
+qd uses Changesets for package versioning, changelog generation, internal workspace dependency updates, and publish selection. Do not edit package versions or changelog sections by hand for normal releases.
+
+For a change that should be released, add a changeset before merging:
 
 ```sh
-nix develop -c corepack pnpm --filter ./packages/core publish --access public --otp=123456
-nix develop -c corepack pnpm --filter ./packages/cli publish --access public --otp=123456
+nix develop -c just changeset
 ```
 
-After publish, verify the public install path:
+When preparing a release:
+
+```sh
+nix develop -c just release-version
+nix develop -c just release-check
+nix develop -c just release-tag
+nix develop -c just release-push
+```
+
+`just release-version` runs `changeset version` and refreshes the pnpm lockfile. `just release-tag` commits the generated package version/changelog changes and creates `v<@cat-cave/qdcli version>`. `just release-push` pushes `main` and the exact version tag, which triggers `.github/workflows/publish.yml`.
+
+The core and CLI packages are configured as a fixed Changesets group, so they version together. The private viewer package is ignored for publishing.
+
+## Manual Publish
+
+Manual publishing should be rare. Prefer Trusted Publishing.
+
+For a local bootstrap or emergency manual publish, run the same Changesets publish command after `just release-version` and `just release-check`:
+
+```sh
+nix develop -c just release-publish
+```
+
+After any publish, verify the public install path:
 
 ```sh
 npx @cat-cave/qdcli --version
@@ -66,15 +90,6 @@ Configure each package on npmjs.com under package Settings -> Trusted Publishing
 - Workflow filename: `publish.yml`
 - Allowed action: `npm publish`
 
-The workflow validates the repo, packs the core and CLI tarballs with pnpm so workspace dependencies are rewritten, then publishes those tarballs with npm's OIDC trusted publisher flow.
+The workflow validates the repo, then lets Changesets publish the core and CLI packages through pnpm using npm's OIDC trusted publisher flow.
 
-To prepare a release:
-
-```sh
-nix develop -c just release-bump patch
-nix develop -c just release-check
-nix develop -c just release-tag
-nix develop -c just release-push
-```
-
-`just release-bump` accepts `patch`, `minor`, `major`, or an exact `x.y.z` version. It updates the workspace package versions together, prepends `CHANGELOG.md`, and refreshes `pnpm-lock.yaml`. `just release-tag` commits the prepared release and creates `v<version>`. `just release-push` pushes `main` and the exact version tag, which triggers `.github/workflows/publish.yml` through npm Trusted Publishing.
+The workflow runs `changeset publish --no-git-tag`. Changesets detects pnpm and publishes only packages whose local version is newer than npm, while pnpm handles workspace dependency rewriting. Git tags are owned by qd's `v<version>` release tags, so package-specific Changesets tags are disabled.

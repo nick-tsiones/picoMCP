@@ -42,8 +42,12 @@ npm-smoke:
 mutation:
   corepack pnpm exec stryker run
 
-release-bump BUMP="patch":
-  corepack pnpm exec node scripts/release-bump.mjs {{BUMP}}
+changeset:
+  corepack pnpm exec changeset
+
+release-version:
+  corepack pnpm exec changeset version
+  corepack pnpm install --lockfile-only
 
 release-check:
   just ci
@@ -51,10 +55,13 @@ release-check:
   just mutation
 
 release-tag:
-  VERSION="$(node -p 'require("./package.json").version')"; git add .github/workflows/publish.yml CHANGELOG.md package.json pnpm-lock.yaml apps/viewer/package.json packages/core/package.json packages/cli/package.json packages/cli/src/index.ts scripts/release-bump.mjs scripts/validate-npm-package.sh docs/publishing.md justfile vitest.config.ts stryker.config.json packages/core/src/*.test.ts; git commit -m "Release v$VERSION"; git tag "v$VERSION"
+  VERSION="$(node -p 'require("./packages/cli/package.json").version')"; git add .changeset package.json pnpm-lock.yaml packages/core/package.json packages/core/CHANGELOG.md packages/cli/package.json packages/cli/CHANGELOG.md; git commit -m "Release v$VERSION"; git tag "v$VERSION"
 
 release-push:
-  VERSION="$(node -p 'require("./package.json").version')"; git push origin main "v$VERSION"
+  VERSION="$(node -p 'require("./packages/cli/package.json").version')"; git push origin main "v$VERSION"
+
+release-publish:
+  corepack pnpm exec changeset publish --no-git-tag
 
 view *ARGS:
   corepack pnpm exec vp run @qdcli/viewer#dev -- {{ARGS}}
