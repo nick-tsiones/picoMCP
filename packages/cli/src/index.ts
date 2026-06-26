@@ -2649,12 +2649,16 @@ function findWorkspaceRoot(): string {
 
 function cliVersion(): string {
   const here = path.dirname(fileURLToPath(import.meta.url));
-  const packagePath = path.join(here, "..", "package.json");
-  try {
-    const parsed = JSON.parse(readFileSync(packagePath, "utf8")) as { version?: unknown };
-    if (typeof parsed.version === "string" && parsed.version.trim()) return parsed.version;
-  } catch {
-    // Development builds without a package manifest should not report a stale release.
+  for (const packagePath of [
+    path.join(here, "..", "package.json"),
+    path.join(here, "package.json"),
+  ]) {
+    try {
+      const parsed = JSON.parse(readFileSync(packagePath, "utf8")) as { version?: unknown };
+      if (typeof parsed.version === "string" && parsed.version.trim()) return parsed.version;
+    } catch {
+      // Development builds without a package manifest should not report a stale release.
+    }
   }
   return "0.0.0-dev";
 }

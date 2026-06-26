@@ -1,5 +1,13 @@
 # @cat-cave/qdcli
 
+## 0.1.7
+
+### Patch Changes
+
+- Fix the Nix flake package dependency closure so the offline pnpm install includes the release tooling required by the package build.
+- Updated dependencies
+  - @cat-cave/qdcli-core@0.1.7
+
 ## 0.1.6
 
 ### Patch Changes

@@ -36,7 +36,7 @@
           };
           qd = pkgs.stdenv.mkDerivation (finalAttrs: {
             pname = "qd";
-            version = "0.1.0";
+            version = "0.1.7";
 
             inherit src;
 
@@ -44,7 +44,7 @@
               inherit (finalAttrs) pname version src;
               inherit pnpm;
               fetcherVersion = 3;
-              hash = "sha256-ieOpf6zHB3xGzi9K3jfb5wrOzPAbvwW693UNaRC4ZG8=";
+              hash = "sha256-nIQxK+K42EUJ0HR0HqDoj5wzkjg/v4jBO6LDFkKcKsk=";
             };
 
             nativeBuildInputs = [
@@ -69,6 +69,7 @@
               runHook preInstall
 
               install -Dm755 packages/cli/dist/index.mjs "$out/lib/qd/index.mjs"
+              install -Dm644 packages/cli/package.json "$out/lib/qd/package.json"
               mkdir -p "$out/lib/qd/node_modules/@cat-cave/qdcli-core"
               cp -r packages/core/dist packages/core/package.json "$out/lib/qd/node_modules/@cat-cave/qdcli-core/"
               mkdir -p "$out/lib/qd/node_modules/@tursodatabase"
