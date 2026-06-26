@@ -17,7 +17,7 @@ If neither is set, qd uses the nearest ancestor `.qd/` directory. If no ancestor
 - `qd ready [--json]`
 - `qd graph --format table|json|mermaid|dot`
 - `qd export [--out <json>]`
-- `qd import --from <json> [--schema-mapping <json>] [--dry-run] [--verbose]`
+- `qd import --from <json> [--schema-mapping <json>] [--adapter roadmap-html|markdown-checklist] [--dry-run] [--verbose]`
 - `qd velocity [--window 7]`
 - `qd critical-path [--milestone <name>]`
 - `qd eta [--window 7] [--milestone <name>]`
@@ -57,6 +57,15 @@ qd import --from roadmap/spec-dag.json --schema-mapping roadmap/qd-import-map.js
 ```
 
 The import path is strict: unknown statuses require `statusMap`, malformed arrays fail, required fields must resolve, dependency arrays can create edges, and qd checks duplicate ids, missing edge endpoints, and `requires` cycles before writing.
+
+Reference adapters normalize common roadmap formats into qd's canonical import JSON:
+
+```sh
+qd import --from docs/ROADMAP.html --adapter roadmap-html --dry-run --json
+qd import --from roadmap.md --adapter markdown-checklist --dry-run --json
+```
+
+Adapters are intentionally small. For project-specific roadmap formats, write a project-local normalizer that emits `{ "nodes": [...], "edges": [...] }`, then import that JSON with qd's strict importer.
 
 See [Importing An Existing DAG](./import.md) for the full `ImportMapping` schema.
 

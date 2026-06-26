@@ -6,6 +6,7 @@ import {
   addFinding,
   addNode,
   addNodeNote,
+  adaptImportSource,
   analyticsReport,
   cancelNode,
   ciFail,
@@ -49,6 +50,7 @@ import {
   type QdConfig,
   type AddNodeInput,
   type EdgeType,
+  type ImportAdapter,
   type GraphSnapshot,
   type NodeKind,
   type NodeStatus,
@@ -588,10 +590,16 @@ async function importCommand(
 ): Promise<void> {
   const filePath = path.resolve(root, required(options.from, "--from"));
   const mappingPath = stringOpt(options["schema-mapping"]);
+  const adapter = stringOpt(options.adapter);
   const dryRun = Boolean(options["dry-run"]);
   const verbose = Boolean(options.verbose);
-  const source = JSON.parse(await readFile(filePath, "utf8")) as unknown;
-  const canonicalSnapshot = canonicalSnapshotFrom(source);
+  if (adapter && mappingPath) {
+    throw new Error("qd import --adapter cannot be combined with --schema-mapping");
+  }
+  const source = adapter
+    ? adaptImportSource(importAdapter(adapter), await readFile(filePath, "utf8"))
+    : (JSON.parse(await readFile(filePath, "utf8")) as unknown);
+  const canonicalSnapshot = adapter ? undefined : canonicalSnapshotFrom(source);
   if (canonicalSnapshot && !mappingPath) {
     const report = {
       ok: true,
@@ -1021,6 +1029,7 @@ const defaultImportMapping: ImportMapping = {
 };
 
 const NODE_KINDS = ["feature", "fix", "refactor", "test", "docs", "infra", "audit-fix"] as const;
+const IMPORT_ADAPTERS = ["roadmap-html", "markdown-checklist"] as const;
 const NODE_STATUSES = [
   "draft",
   "ready",
@@ -1546,6 +1555,11 @@ function validValuesFor(isValue: (candidate: string) => boolean): readonly strin
   return [];
 }
 
+function importAdapter(value: string): ImportAdapter {
+  if ((IMPORT_ADAPTERS as readonly string[]).includes(value)) return value as ImportAdapter;
+  throw new Error(`--adapter must be one of ${IMPORT_ADAPTERS.join(", ")}`);
+}
+
 function isPriority(value: string): value is Priority {
   return (PRIORITIES as readonly string[]).includes(value);
 }
@@ -1749,6 +1763,8 @@ Core:
   qd config set check-command --value "<fast project check command>"
   qd export [--out roadmap/spec-dag.json]
   qd import --from roadmap/spec-dag.json [--schema-mapping qd-import-map.json] [--dry-run] [--verbose]
+  qd import --from docs/ROADMAP.html --adapter roadmap-html [--dry-run]
+  qd import --from roadmap.md --adapter markdown-checklist [--dry-run]
   qd workspace status|ready|graph [--json] [--config ~/.config/qd/workspaces.toml] [--repo <path>]
 
 Graph:
