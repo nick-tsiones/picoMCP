@@ -1,0 +1,30 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+      - uses: cachix/install-nix-action@v31.10.6
+      - run: nix develop -c just ci
+      - run: nix develop -c just npm-smoke
+      - run: mkdir -p dist-npm
+      - run: nix develop -c corepack pnpm --filter ./packages/core pack --pack-destination dist-npm
+      - run: npm publish dist-npm/cat-cave-qdcli-core-*.tgz --access public
+      - run: nix develop -c corepack pnpm --filter ./packages/cli pack --pack-destination dist-npm
+      - run: npm publish dist-npm/cat-cave-qdcli-*.tgz --access public
