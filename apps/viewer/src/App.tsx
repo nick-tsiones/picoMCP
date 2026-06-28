@@ -175,6 +175,14 @@ function App() {
 
   const ready = useMemo(() => (snapshot ? readyNodes(snapshot) : []), [snapshot]);
   const selectedNode = snapshot?.nodes.find((node) => node.id === selected) ?? null;
+  const openAssignments = useMemo(
+    () => snapshot?.assignments.filter((assignment) => assignment.status === "open") ?? [],
+    [snapshot],
+  );
+  const openWaves = useMemo(
+    () => snapshot?.waves.filter((wave) => wave.status === "open") ?? [],
+    [snapshot],
+  );
   const criticalIds = useMemo(
     () => new Set(analytics?.criticalPath.criticalPath.map((node) => node.id) ?? []),
     [analytics],
@@ -197,7 +205,13 @@ function App() {
             {snapshot.nodes.length} nodes, {snapshot.edges.length} edges, {ready.length} ready
           </p>
         </div>
-        <MetricStrip snapshot={snapshot} analytics={analytics} ready={ready.length} />
+        <MetricStrip
+          snapshot={snapshot}
+          analytics={analytics}
+          ready={ready.length}
+          openAssignments={openAssignments.length}
+          openWaves={openWaves.length}
+        />
       </header>
 
       <section className="workspace">
@@ -216,7 +230,9 @@ function App() {
             lastUpdated={lastUpdated}
             error={error}
           />
+          <HealthPanel snapshot={snapshot} analytics={analytics} />
           <ReadyQueue ready={ready} selected={selected} onSelect={setSelected} />
+          <WavePanel snapshot={snapshot} selected={selected} onSelect={setSelected} />
         </aside>
 
         <section className="graphPanel">
@@ -442,10 +458,14 @@ function MetricStrip({
   snapshot,
   analytics,
   ready,
+  openAssignments,
+  openWaves,
 }: {
   snapshot: GraphSnapshot;
   analytics: AnalyticsReport | null;
   ready: number;
+  openAssignments: number;
+  openWaves: number;
 }) {
   const donePoints = snapshot.nodes
     .filter((node) => node.status === "done")
@@ -468,6 +488,8 @@ function MetricStrip({
         value={analytics ? String(analytics.criticalPath.criticalPathPoints) : "n/a"}
       />
       <Metric label="P0/P1" value={String(openBlocking)} />
+      <Metric label="Owners" value={String(openAssignments)} />
+      <Metric label="Waves" value={String(openWaves)} />
     </div>
   );
 }
@@ -511,6 +533,96 @@ function ReadyQueue({
             <small>{node.title}</small>
           </button>
         ))
+      )}
+    </section>
+  );
+}
+
+function HealthPanel({
+  snapshot,
+  analytics,
+}: {
+  snapshot: GraphSnapshot;
+  analytics: AnalyticsReport | null;
+}) {
+  const blocked = snapshot.nodes.filter((node) => node.status === "blocked");
+  const review = snapshot.nodes.filter((node) => node.status === "review");
+  const mergeable = snapshot.nodes.filter((node) => node.status === "mergeable");
+  const progress = milestoneProgress(snapshot);
+  return (
+    <section className="toolBlock healthBlock">
+      <div className="panelTitle">
+        <h2>Health</h2>
+        <span>{analytics?.eta.etaDate ?? "no ETA"}</span>
+      </div>
+      <div className="healthGrid">
+        <Metric label="Blocked" value={String(blocked.length)} />
+        <Metric label="Review" value={String(review.length)} />
+        <Metric label="Mergeable" value={String(mergeable.length)} />
+      </div>
+      <div className="progressList">
+        {progress.slice(0, 5).map((item) => (
+          <div key={item.name} className="progressItem">
+            <span>{item.name}</span>
+            <strong>
+              {item.done}/{item.total}
+            </strong>
+            <i style={{ inlineSize: `${item.percent}%` }} />
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function WavePanel({
+  snapshot,
+  selected,
+  onSelect,
+}: {
+  snapshot: GraphSnapshot;
+  selected: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const membershipsByWave = new Map<string, string[]>();
+  for (const membership of snapshot.wave_memberships) {
+    if (!membership.node_id) continue;
+    membershipsByWave.set(membership.wave_id, [
+      ...(membershipsByWave.get(membership.wave_id) ?? []),
+      membership.node_id,
+    ]);
+  }
+  const openWaves = snapshot.waves.filter((wave) => wave.status === "open");
+  return (
+    <section className="toolBlock queueBlock">
+      <div className="panelTitle">
+        <h2>Open Waves</h2>
+        <span>{openWaves.length}</span>
+      </div>
+      {openWaves.length === 0 ? (
+        <p className="emptyState">No open waves.</p>
+      ) : (
+        openWaves.slice(0, 8).map((wave) => {
+          const nodes = membershipsByWave.get(wave.id) ?? [];
+          return (
+            <div key={wave.id} className="waveItem">
+              <strong>{wave.kind}</strong>
+              <small>{wave.summary}</small>
+              <div className="waveNodes">
+                {nodes.slice(0, 6).map((id) => (
+                  <button
+                    key={id}
+                    type="button"
+                    className={selected === id ? "miniNode activeMiniNode" : "miniNode"}
+                    onClick={() => onSelect(id)}
+                  >
+                    {id}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })
       )}
     </section>
   );
@@ -596,6 +708,7 @@ function GraphNodes({
   onSelect: (id: string) => void;
 }) {
   const findingCounts = findingCountByNode(snapshot.findings);
+  const assignmentCounts = assignmentCountByNode(snapshot);
   return (
     <g className="nodes">
       {layout.nodes.map((item) => {
@@ -607,6 +720,7 @@ function GraphNodes({
         const dimmed =
           (filters.dimFiltered && !filtered) || (filters.focusSelection && selected && !focused);
         const blocking = findingCounts.get(node.id) ?? 0;
+        const assignments = assignmentCounts.get(node.id) ?? 0;
         return (
           <g
             key={node.id}
@@ -640,6 +754,10 @@ function GraphNodes({
               <text className="findingBadge" x={nodeWidth - 14} y="80">
                 {blocking} P0/P1
               </text>
+            ) : assignments > 0 ? (
+              <text className="findingBadge neutral" x={nodeWidth - 14} y="80">
+                {assignments} active
+              </text>
             ) : null}
           </g>
         );
@@ -660,6 +778,7 @@ function NodeDetail({
   const findings = snapshot.findings.filter((finding) => finding.node_id === node.id);
   const runs = snapshot.runs.filter((run) => run.node_id === node.id);
   const notes = snapshot.node_notes.filter((note) => note.node_id === node.id);
+  const assignments = snapshot.assignments.filter((assignment) => assignment.node_id === node.id);
   const dependencies = snapshot.edges.filter(
     (edge) => edge.to_node === node.id && edge.type === "requires",
   );
@@ -668,6 +787,11 @@ function NodeDetail({
   );
   const criticalIndex =
     analytics?.criticalPath.criticalPath.findIndex((item) => item.id === node.id) ?? -1;
+  const latestRuns = latestRunsByKind(runs);
+  const nodeWaves = snapshot.wave_memberships
+    .filter((membership) => membership.node_id === node.id)
+    .map((membership) => snapshot.waves.find((wave) => wave.id === membership.wave_id))
+    .filter((wave): wave is NonNullable<typeof wave> => Boolean(wave));
 
   return (
     <section className="detailContent">
@@ -697,6 +821,29 @@ function NodeDetail({
       {criticalIndex >= 0 ? (
         <p className="criticalNote">Critical path position {criticalIndex + 1}</p>
       ) : null}
+      {node.blocked_by ? (
+        <p className="blockerNote">
+          Blocked by {node.blocked_by}: {node.blocked_reason}
+          {node.blocked_owner ? ` (${node.blocked_owner})` : ""}
+        </p>
+      ) : null}
+      <DetailList
+        title="Latest Runs"
+        items={[...latestRuns.entries()].map(([kind, run]) => `${kind}: ${run.status}`)}
+      />
+      <DetailList
+        title="Assignments"
+        items={assignments.map(
+          (assignment) =>
+            `${assignment.role} ${assignment.status}: ${assignment.owner}${
+              assignment.worktree_path ? ` @ ${assignment.worktree_path}` : ""
+            }`,
+        )}
+      />
+      <DetailList
+        title="Waves"
+        items={nodeWaves.map((wave) => `${wave.kind} ${wave.status}: ${wave.summary}`)}
+      />
       <DetailSection title="Spec" text={node.spec} />
       <DetailSection title="Acceptance" text={node.acceptance} />
       <DetailList title="Dependencies" items={dependencies.map((edge) => edge.from_node)} />
@@ -913,6 +1060,40 @@ function findingCountByNode(findings: QdFinding[]): Map<string, number> {
     counts.set(finding.node_id, (counts.get(finding.node_id) ?? 0) + 1);
   }
   return counts;
+}
+
+function assignmentCountByNode(snapshot: GraphSnapshot): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const assignment of snapshot.assignments) {
+    if (assignment.status !== "open") continue;
+    counts.set(assignment.node_id, (counts.get(assignment.node_id) ?? 0) + 1);
+  }
+  return counts;
+}
+
+function latestRunsByKind(runs: GraphSnapshot["runs"]): Map<string, GraphSnapshot["runs"][number]> {
+  const byKind = new Map<string, GraphSnapshot["runs"][number]>();
+  for (const run of runs) byKind.set(run.kind, run);
+  return byKind;
+}
+
+function milestoneProgress(snapshot: GraphSnapshot): Array<{
+  name: string;
+  done: number;
+  total: number;
+  percent: number;
+}> {
+  const names = [...new Set(snapshot.nodes.map((node) => node.milestone ?? "unassigned"))].sort();
+  return names.map((name) => {
+    const nodes = snapshot.nodes.filter((node) => (node.milestone ?? "unassigned") === name);
+    const done = nodes.filter((node) => node.status === "done").length;
+    return {
+      name,
+      done,
+      total: nodes.length,
+      percent: nodes.length === 0 ? 0 : Math.round((done / nodes.length) * 100),
+    };
+  });
 }
 
 function wrapText(text: string, maxLength: number, maxLines: number): string[] {

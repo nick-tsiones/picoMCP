@@ -48,6 +48,17 @@ export interface QdConfig {
   maskedEnv: string[];
   broadAuditEvery: number;
   deepAuditEvery: number;
+  policy: {
+    requireAuditBeforeCi: boolean;
+    requireVerificationBeforeCi: boolean;
+    requireP2P3DispositionBeforeMerge: boolean;
+    requireMergeCommit: boolean;
+  };
+  worktree: {
+    baseDir: string;
+    envTemplate: string;
+    envFile: string;
+  };
 }
 
 export const defaultConfig: QdConfig = {
@@ -84,6 +95,17 @@ export const defaultConfig: QdConfig = {
   maskedEnv: [],
   broadAuditEvery: 3,
   deepAuditEvery: 9,
+  policy: {
+    requireAuditBeforeCi: true,
+    requireVerificationBeforeCi: true,
+    requireP2P3DispositionBeforeMerge: true,
+    requireMergeCommit: true,
+  },
+  worktree: {
+    baseDir: ".qd/worktrees",
+    envTemplate: "",
+    envFile: ".env",
+  },
 };
 
 export async function resolveProjectRoot(
@@ -187,6 +209,17 @@ masked_env = []
 [waves]
 broad_audit_every = 3
 deep_audit_every = 9
+
+[policy]
+require_audit_before_ci = true
+require_verification_before_ci = true
+require_p2_p3_disposition_before_merge = true
+require_merge_commit = true
+
+[worktree]
+base_dir = ".qd/worktrees"
+env_template = ""
+env_file = ".env"
 `,
   );
   await writeIfMissing(
@@ -251,6 +284,13 @@ export function parseConfig(content: string): QdConfig {
     "secrets_masked_env",
     "waves_broad_audit_every",
     "waves_deep_audit_every",
+    "policy_require_audit_before_ci",
+    "policy_require_verification_before_ci",
+    "policy_require_p2_p3_disposition_before_merge",
+    "policy_require_merge_commit",
+    "worktree_base_dir",
+    "worktree_env_template",
+    "worktree_env_file",
   ]);
   let section = "";
   for (const [index, rawLine] of content.split(/\r?\n/).entries()) {
@@ -314,6 +354,25 @@ export function parseConfig(content: string): QdConfig {
     maskedEnv: optionalStringArrayValue(values, "secrets_masked_env", []),
     broadAuditEvery: optionalNumberValue(values, "waves_broad_audit_every", 3),
     deepAuditEvery: optionalNumberValue(values, "waves_deep_audit_every", 9),
+    policy: {
+      requireAuditBeforeCi: optionalBooleanValue(values, "policy_require_audit_before_ci", true),
+      requireVerificationBeforeCi: optionalBooleanValue(
+        values,
+        "policy_require_verification_before_ci",
+        true,
+      ),
+      requireP2P3DispositionBeforeMerge: optionalBooleanValue(
+        values,
+        "policy_require_p2_p3_disposition_before_merge",
+        true,
+      ),
+      requireMergeCommit: optionalBooleanValue(values, "policy_require_merge_commit", true),
+    },
+    worktree: {
+      baseDir: optionalStringValue(values, "worktree_base_dir") || ".qd/worktrees",
+      envTemplate: optionalStringValue(values, "worktree_env_template"),
+      envFile: optionalStringValue(values, "worktree_env_file") || ".env",
+    },
   };
 }
 
@@ -337,6 +396,17 @@ function requiredStringValue(
 
 function requiredBooleanValue(values: Record<string, unknown>, key: string): boolean {
   const value = values[key];
+  if (typeof value !== "boolean") throw new Error(`${key} must be true or false`);
+  return value;
+}
+
+function optionalBooleanValue(
+  values: Record<string, unknown>,
+  key: string,
+  fallback: boolean,
+): boolean {
+  const value = values[key];
+  if (value === undefined) return fallback;
   if (typeof value !== "boolean") throw new Error(`${key} must be true or false`);
   return value;
 }
@@ -458,6 +528,17 @@ masked_env = [${config.maskedEnv.map((item) => `"${escapeTomlString(item)}"`).jo
 [waves]
 broad_audit_every = ${config.broadAuditEvery}
 deep_audit_every = ${config.deepAuditEvery}
+
+[policy]
+require_audit_before_ci = ${config.policy.requireAuditBeforeCi}
+require_verification_before_ci = ${config.policy.requireVerificationBeforeCi}
+require_p2_p3_disposition_before_merge = ${config.policy.requireP2P3DispositionBeforeMerge}
+require_merge_commit = ${config.policy.requireMergeCommit}
+
+[worktree]
+base_dir = "${escapeTomlString(config.worktree.baseDir)}"
+env_template = "${escapeTomlString(config.worktree.envTemplate)}"
+env_file = "${escapeTomlString(config.worktree.envFile)}"
 `;
 }
 
@@ -539,7 +620,8 @@ function parseTomlValue(value: string): string | boolean | number | string[] {
       .split(",")
       .map((item) => item.trim())
       .filter(Boolean)
-      .map((item) => (item.startsWith('"') && item.endsWith('"') ? item.slice(1, -1) : item));
+      .map((item) => (item.startsWith('"') && item.endsWith('"') ? item.slice(1, -1) : item))
+      .filter(Boolean);
   }
   return value;
 }

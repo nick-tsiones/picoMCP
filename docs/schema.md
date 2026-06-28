@@ -132,6 +132,19 @@ Waves group nodes and assignments into orchestration batches. qd records wave st
 
 Use waves to make broad/deep audit cadence auditable through qd state instead of chat memory.
 
+## Policy And Worktree Config
+
+Lifecycle policy lives in `.qd/config.toml`, not in each node. The default policy requires:
+
+- passed audit before CI
+- declared verification evidence before CI
+- P2/P3 finding disposition before merge
+- merge commit SHA when recording qd merge state
+
+Inspect it with `qd config get policy --json` and evaluate a specific node with `qd policy evaluate <node> --phase ci|merge --json`.
+
+Worktree config also lives in `.qd/config.toml` under `[worktree]`: `base_dir`, `env_template`, and `env_file`. qd may write env files into worktrees, but env contents are not part of the graph schema and are never included in qd exports.
+
 ## Findings
 
 Findings belong to a node and can be P0, P1, P2, or P3.

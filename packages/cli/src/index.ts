@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { appendFile, copyFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { createReadStream, readFileSync } from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -44,6 +44,7 @@ import {
   listWaves,
   latestRun,
   markMerged,
+  policyReport,
   promoteFindings,
   readConfig,
   recordCiResult,
@@ -238,6 +239,8 @@ async function main(): Promise<void> {
       return mergeCommand(root, action, args.options, json);
     case "plan":
       return planCommand(root, action, args.options, json);
+    case "policy":
+      return policyCommand(root, action, extra, args.options, json);
     case "milestone":
       return milestoneCommand(root, action, extra, args.options, json);
     case "velocity":
@@ -942,6 +945,10 @@ async function gate(root: string, nodeId: string, json: boolean): Promise<void> 
   });
   const enriched = {
     ...result,
+    policy: {
+      ci: await policyReport(root, nodeId, "ci"),
+      merge: await policyReport(root, nodeId, "merge"),
+    },
     checks: {
       latestCheck: latestCheck ?? null,
       latestCi: latestCi ?? null,
@@ -1139,16 +1146,24 @@ async function worktreeCommand(
   if (action === "list" || action === "status" || !action) {
     const worktrees = await gitWorktrees(root);
     const node = nodeId ? await getNode(root, nodeId) : null;
+    const config = await readConfig(root);
     const filtered = node?.branch
       ? worktrees.filter((worktree) => worktree.branch === node.branch)
       : worktrees;
-    return output(filtered, json);
+    return output(
+      await Promise.all(filtered.map((worktree) => enrichWorktree(root, worktree, config))),
+      json,
+    );
   }
   if (action === "create") {
     const node = await getNode(root, requiredArg(nodeId, "node id"));
+    const config = await readConfig(root);
     const kind = stringOpt(options.kind) ?? "spec";
     const branch = stringOpt(options.branch) ?? `${kind}/${node.id}`;
-    const worktreePath = path.resolve(root, required(options.path, "--path"));
+    const worktreePath = path.resolve(
+      root,
+      stringOpt(options.path) ?? path.join(config.worktree.baseDir, node.id),
+    );
     const existing = await gitWorktrees(root);
     if (existing.some((worktree) => worktree.branch === branch)) {
       throw new Error(`Branch is already checked out in a worktree: ${branch}`);
@@ -1164,7 +1179,44 @@ async function worktreeCommand(
     const result = await captureCommand("git", args, root);
     if (result.code !== 0) throw new Error(`git worktree add failed: ${result.stderr}`);
     const updated = await updateNode(root, node.id, { branch });
-    return output({ ok: true, node: updated, branch, worktree: worktreePath }, json);
+    const envFile = await maybeWriteWorktreeEnv(
+      root,
+      worktreePath,
+      node.id,
+      branch,
+      options,
+      config,
+    );
+    if (options.assignment) {
+      await addAssignment(root, {
+        nodeId: node.id,
+        role: strictEnumOpt(options.role, isAssignmentRole, "--role", "worker"),
+        owner: required(options.owner, "--owner"),
+        branch,
+        worktreePath,
+        scope: stringOpt(options.scope),
+      });
+    }
+    return output({ ok: true, node: updated, branch, worktree: worktreePath, envFile }, json);
+  }
+  if (action === "env") {
+    const node = await getNode(root, requiredArg(nodeId, "node id"));
+    if (!node.branch) throw new Error(`Node ${node.id} has no branch`);
+    const config = await readConfig(root);
+    const worktree = (await gitWorktrees(root)).find((entry) => entry.branch === node.branch);
+    if (!worktree) throw new Error(`No worktree found for branch ${node.branch}`);
+    const envFile = await writeWorktreeEnv(
+      root,
+      worktree.path,
+      node.id,
+      node.branch,
+      options,
+      config,
+    );
+    return output(
+      { ok: true, nodeId: node.id, branch: node.branch, worktree: worktree.path, envFile },
+      json,
+    );
   }
   if (action === "cleanup") {
     const node = await getNode(root, requiredArg(nodeId, "node id"));
@@ -1210,6 +1262,86 @@ async function gitWorktrees(
   }
   if (current) entries.push(current);
   return entries;
+}
+
+async function enrichWorktree(
+  root: string,
+  worktree: { path: string; branch: string | null; head: string | null },
+  config: QdConfig,
+): Promise<Record<string, unknown>> {
+  const envPath = path.join(worktree.path, config.worktree.envFile);
+  return {
+    ...worktree,
+    envFile: path.relative(root, envPath),
+    envPresent: await pathExists(envPath),
+  };
+}
+
+async function maybeWriteWorktreeEnv(
+  root: string,
+  worktreePath: string,
+  nodeId: string,
+  branch: string,
+  options: Record<string, string | string[] | boolean>,
+  config: QdConfig,
+): Promise<string | null> {
+  if (!options.env && !options["env-template"] && !config.worktree.envTemplate.trim()) {
+    return null;
+  }
+  return writeWorktreeEnv(root, worktreePath, nodeId, branch, options, config);
+}
+
+async function writeWorktreeEnv(
+  root: string,
+  worktreePath: string,
+  nodeId: string,
+  branch: string,
+  options: Record<string, string | string[] | boolean>,
+  config: QdConfig,
+): Promise<string> {
+  const envFileName = stringOpt(options["env-file"]) ?? config.worktree.envFile;
+  if (envFileName.includes("..") || path.isAbsolute(envFileName)) {
+    throw new Error("--env-file must be a relative file name inside the worktree");
+  }
+  const envPath = path.join(worktreePath, envFileName);
+  await mkdir(path.dirname(envPath), { recursive: true });
+  const template = stringOpt(options["env-template"]) ?? config.worktree.envTemplate;
+  if (template.trim()) {
+    await copyFile(path.resolve(root, template), envPath);
+  } else {
+    await writeFile(envPath, "", { flag: "wx" }).catch((error: unknown) => {
+      if (error && typeof error === "object" && "code" in error && error.code === "EEXIST") {
+        return;
+      }
+      throw error;
+    });
+  }
+  const injected = [
+    "",
+    "# qd worktree context",
+    `QD_ROOT=${quoteEnvValue(root)}`,
+    `QD_NODE_ID=${quoteEnvValue(nodeId)}`,
+    `QD_BRANCH=${quoteEnvValue(branch)}`,
+    `QD_WORKTREE=${quoteEnvValue(worktreePath)}`,
+    ...stringListOpt(options.env)
+      .map(parseEnvAssignment)
+      .map(([key, value]) => `${key}=${quoteEnvValue(value)}`),
+    "",
+  ].join("\n");
+  await appendFile(envPath, injected, "utf8");
+  return path.relative(root, envPath);
+}
+
+function parseEnvAssignment(value: string): [string, string] {
+  const index = value.indexOf("=");
+  if (index <= 0) throw new Error("--env must be KEY=value");
+  const key = value.slice(0, index);
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) throw new Error(`Invalid env var name: ${key}`);
+  return [key, value.slice(index + 1)];
+}
+
+function quoteEnvValue(value: string): string {
+  return JSON.stringify(value);
 }
 
 async function ciCommand(
@@ -1489,15 +1621,46 @@ async function verificationCommand(
       `Node ${id} has no ${type} verification entry. Sign off only declared verification gates.`,
     );
   }
+  const matchingEntries = node.verification.filter((entry) => entry.type === type);
+  const signedEntry =
+    matchingEntries.length === 1
+      ? matchingEntries[0]
+      : matchingEntries.find((entry) => entry.value === stringOpt(options.value));
+  if (node.verification.length > 0 && !signedEntry) {
+    throw new Error(
+      `Node ${id} has multiple ${type} verification entries. Pass --value with the declared verification value.`,
+    );
+  }
   const text = [
     `Verification sign-off (${type}): ${note}`,
+    signedEntry ? `Value: ${signedEntry.value}` : null,
     evidence ? `Evidence: ${evidence}` : null,
   ]
     .filter(Boolean)
     .join("\n");
   const saved = await addNodeNote(root, id, text);
+  const command = signedEntry ? verificationRunCommandKey(signedEntry) : `${type}:${note}`;
+  const runRow = await startRun(root, id, "verification", {
+    command,
+    provider: "sign-off",
+    reportPath: evidence ?? null,
+    summary: note,
+  });
+  const finished = await finishRun(root, runRow.id, {
+    status: "passed",
+    summary: note,
+  });
   return output(
-    { ok: true, nodeId: id, type, note, evidence: evidence ?? null, noteRecord: saved },
+    {
+      ok: true,
+      nodeId: id,
+      type,
+      value: signedEntry?.value ?? null,
+      note,
+      evidence: evidence ?? null,
+      noteRecord: saved,
+      run: finished,
+    },
     json,
   );
 }
@@ -1545,6 +1708,10 @@ async function verificationRunCommand(
   if (results.some((runRow) => runRow.status !== "passed")) process.exitCode = 1;
 }
 
+function verificationRunCommandKey(entry: VerificationEntry): string {
+  return entry.type === "command" ? entry.value : `${entry.type}:${entry.value}`;
+}
+
 async function advanceCommand(
   root: string,
   nodeId: string | undefined,
@@ -1581,6 +1748,13 @@ async function advanceCommand(
   }
 
   if (!options["skip-ci"] && config.ciCommand.trim()) {
+    const policy = await policyReport(root, id, "ci");
+    steps.push({ step: "policy:ci", ok: policy.ok, detail: policy });
+    if (!policy.ok) {
+      output({ ok: false, stoppedAt: "policy:ci", steps, node: await getNode(root, id) }, json);
+      process.exitCode = 1;
+      return;
+    }
     const ci = await executeConfiguredCheck(root, id, "ci", options);
     steps.push({ step: "ci", ok: ci.ok, detail: ci });
     if (!ci.ok) {
@@ -1668,6 +1842,22 @@ async function planCommand(
     );
   }
   throw new Error(`Unknown plan action: ${action}`);
+}
+
+async function policyCommand(
+  root: string,
+  action: string | undefined,
+  nodeId: string | undefined,
+  options: Record<string, string | string[] | boolean>,
+  json: boolean,
+): Promise<void> {
+  if (action !== "evaluate" && action !== "check") {
+    throw new Error(`Unknown policy action: ${action}`);
+  }
+  const phase = strictEnumOpt(options.phase, isPolicyPhase, "--phase", "ci");
+  const result = await policyReport(root, requiredArg(nodeId, "node id"), phase);
+  output(result, json);
+  if (!result.ok) process.exitCode = 1;
 }
 
 async function milestoneCommand(
@@ -2601,6 +2791,13 @@ async function executeConfiguredCheck(
     }
   }
 
+  if (kind === "ci") {
+    const policy = await policyReport(root, nodeId, "ci");
+    if (!policy.ok) {
+      return { ok: false, exitCode: 1, command: null, logPath: null, blocking: policy };
+    }
+  }
+
   if (config.requireCleanWorktree) await assertCleanWorktree(root, config.cleanWorktreeExcept);
 
   const node = await getNode(root, nodeId);
@@ -3001,6 +3198,7 @@ const NOTE_KINDS = [
   "risk-acceptance",
   "migration-note",
 ] as const;
+const POLICY_PHASES = ["completion", "ci", "merge"] as const;
 
 function mapImportNode(
   raw: unknown,
@@ -3510,6 +3708,7 @@ function parseArgs(argv: string[]): ParsedArgs {
     "repo",
     "commit",
     "evidence",
+    "env",
   ]);
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -3630,6 +3829,41 @@ function setConfigValue(config: QdConfig, key: string, value: string): QdConfig 
     return { ...config, ciTimeoutSeconds: parsePositiveInteger(value, key) };
   if (key === "ci_no_output_timeout_seconds" || key === "ci-no-output-timeout-seconds")
     return { ...config, ciNoOutputTimeoutSeconds: parsePositiveInteger(value, key) };
+  if (key === "policy_require_audit_before_ci" || key === "policy-require-audit-before-ci")
+    return {
+      ...config,
+      policy: { ...config.policy, requireAuditBeforeCi: parseBoolean(value, key) },
+    };
+  if (
+    key === "policy_require_verification_before_ci" ||
+    key === "policy-require-verification-before-ci"
+  )
+    return {
+      ...config,
+      policy: { ...config.policy, requireVerificationBeforeCi: parseBoolean(value, key) },
+    };
+  if (
+    key === "policy_require_p2_p3_disposition_before_merge" ||
+    key === "policy-require-p2-p3-disposition-before-merge"
+  )
+    return {
+      ...config,
+      policy: {
+        ...config.policy,
+        requireP2P3DispositionBeforeMerge: parseBoolean(value, key),
+      },
+    };
+  if (key === "policy_require_merge_commit" || key === "policy-require-merge-commit")
+    return {
+      ...config,
+      policy: { ...config.policy, requireMergeCommit: parseBoolean(value, key) },
+    };
+  if (key === "worktree_base_dir" || key === "worktree-base-dir")
+    return { ...config, worktree: { ...config.worktree, baseDir: value } };
+  if (key === "worktree_env_template" || key === "worktree-env-template")
+    return { ...config, worktree: { ...config.worktree, envTemplate: value } };
+  if (key === "worktree_env_file" || key === "worktree-env-file")
+    return { ...config, worktree: { ...config.worktree, envFile: value } };
   throw new Error(`Unknown config key: ${key}`);
 }
 
@@ -3693,6 +3927,26 @@ function getConfigValue(config: QdConfig, key: string): unknown {
   if (key === "ci_timeout_seconds" || key === "ci-timeout-seconds") return config.ciTimeoutSeconds;
   if (key === "ci_no_output_timeout_seconds" || key === "ci-no-output-timeout-seconds")
     return config.ciNoOutputTimeoutSeconds;
+  if (key === "policy" || key === "policies") return config.policy;
+  if (key === "policy_require_audit_before_ci" || key === "policy-require-audit-before-ci")
+    return config.policy.requireAuditBeforeCi;
+  if (
+    key === "policy_require_verification_before_ci" ||
+    key === "policy-require-verification-before-ci"
+  )
+    return config.policy.requireVerificationBeforeCi;
+  if (
+    key === "policy_require_p2_p3_disposition_before_merge" ||
+    key === "policy-require-p2-p3-disposition-before-merge"
+  )
+    return config.policy.requireP2P3DispositionBeforeMerge;
+  if (key === "policy_require_merge_commit" || key === "policy-require-merge-commit")
+    return config.policy.requireMergeCommit;
+  if (key === "worktree" || key === "worktrees") return config.worktree;
+  if (key === "worktree_base_dir" || key === "worktree-base-dir") return config.worktree.baseDir;
+  if (key === "worktree_env_template" || key === "worktree-env-template")
+    return config.worktree.envTemplate;
+  if (key === "worktree_env_file" || key === "worktree-env-file") return config.worktree.envFile;
   throw new Error(`Unknown config key: ${key}`);
 }
 
@@ -3805,6 +4059,7 @@ function validValuesFor(isValue: (candidate: string) => boolean): readonly strin
   if (isValue === isAssignmentStatus) return ASSIGNMENT_STATUSES;
   if (isValue === isWaveKind) return WAVE_KINDS;
   if (isValue === isNoteKind) return NOTE_KINDS;
+  if (isValue === isPolicyPhase) return POLICY_PHASES;
   return [];
 }
 
@@ -3867,6 +4122,10 @@ function isWaveKind(value: string): value is Parameters<typeof startWave>[1]["ki
 
 function isNoteKind(value: string): value is NoteKind {
   return (NOTE_KINDS as readonly string[]).includes(value);
+}
+
+function isPolicyPhase(value: string): value is "completion" | "ci" | "merge" {
+  return (POLICY_PHASES as readonly string[]).includes(value);
 }
 
 function parseSeverityList(value: string | string[] | boolean | undefined): Priority[] | undefined {
@@ -4441,6 +4700,7 @@ Core:
   qd import --from docs/ROADMAP.html --adapter roadmap-html [--dry-run]
   qd import --from roadmap.md --adapter markdown-checklist [--dry-run]
   qd workspace status|ready|graph [--json] [--config ~/.config/qd/workspaces.toml] [--repo <path>]
+  qd policy evaluate <node> --phase ci|merge
 
 Graph:
   qd node add --title <text> --spec <text> --acceptance <text> [--id <id>] [--project <name>] [--verify type=command,value="<command>"] [--ci-command <command>]
@@ -4462,6 +4722,8 @@ Graph:
   qd complete <node> --summary <text>
   qd advance <node> --summary <text> [--merge]
   qd diff <node> [--base main] [--self-only] [--name-only]
+  qd worktree create <node> [--branch spec/<node>] [--path <path>] [--env-template .env.example] [--env KEY=value]
+  qd worktree env <node> [--env-template .env.example] [--env KEY=value]
 
 Audit:
   qd audit start <node>
@@ -4507,8 +4769,10 @@ function commandHelp(group: string, action?: string): string {
     assignment:
       "qd assignment add|complete|fail|cancel|list\nRecords opaque external worker/auditor ownership. qd does not launch agents.",
     wave: "qd wave start|add-node|add-assignment|complete|status\nRecords wave-level orchestration state.",
+    policy:
+      "qd policy evaluate <node> --phase ci|merge [--json]\nReports configured lifecycle policy violations as stable codes.",
     worktree:
-      "qd worktree create|status|list|cleanup <node>\nCreates and tracks git worktrees with branch collision checks.",
+      "qd worktree create|env|status|list|cleanup <node>\nCreates git worktrees, records node branches, and writes worktree-local env files without storing env values in qd.",
   };
   return entries[key] ?? entries[group] ?? helpText();
 }
@@ -4520,13 +4784,15 @@ function topicHelp(topic: string): string {
     audits:
       "qd audits: use qd audit start, qd audit pass/fail --from-report, and qd audit dispose/cancel/supersede with rationale for stale runs.",
     worktrees:
-      "qd worktrees: use one branch/worktree per active node or assignment. qd refuses duplicate branch/path checkouts and dirty cleanup.",
+      "qd worktrees: use one branch/worktree per active node or assignment. qd refuses duplicate branch/path checkouts, can inject worktree-local env files, and never stores env values in DAG state.",
     assignments:
       "qd assignments: record role, owner, branch, worktree, scope, commits, and evidence. Owner strings are opaque and agent-agnostic.",
     waves:
       "qd waves: group nodes and assignments into orchestration waves, then complete the wave with a summary.",
     gates:
       "qd gates: qd gate blocks on open P0/P1 findings and running audit runs. Merge additionally requires mergeable status and passed CI by default.",
+    policies:
+      "qd policies: default policy requires audit before CI, declared verification before CI, P2/P3 disposition before merge, and a real merge commit recorded with qd merge.",
     export:
       "qd export: commit deterministic qd JSON, not .qd/qd.db. Configure [export].canonicalize_command for repo formatting hooks.",
     "agent-agnostic-orchestration":

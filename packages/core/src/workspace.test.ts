@@ -7,8 +7,10 @@ import {
   addFinding,
   addNode,
   ciPass,
+  finishRun,
   markMerged,
   setupProject,
+  startRun,
   workspaceGraph,
   workspaceReady,
   workspaceStatus,
@@ -35,8 +37,10 @@ afterEach(async () => {
 
 describe("workspace roll-up", () => {
   it("summarizes multiple repo DAGs", async () => {
+    const audit = await startRun(repoA, "a-1", "audit");
+    await finishRun(repoA, audit.id, { status: "passed", summary: "audit passed" });
     await ciPass(repoA, "a-1");
-    await markMerged(repoA, "a-1", "squash");
+    await markMerged(repoA, "a-1", "squash", { commitSha: "abc1234" });
     await addFinding(repoB, "b-1", {
       severity: "P1",
       title: "Blocking issue",
@@ -62,6 +66,7 @@ describe("workspace roll-up", () => {
       "repo-a:a-1",
       "repo-b:b-1",
     ]);
+    await expect(workspaceReady({ repos: [] })).rejects.toThrow(/Workspace config not found/);
   });
 
   it("returns snapshots tagged by repo", async () => {
@@ -100,6 +105,7 @@ describe("workspace roll-up", () => {
 
     expect(status.ok).toBe(false);
     expect(status.repos[1]?.errors[0]).toMatch(/Missing qd database/);
+    expect(status.repos[1]?.warnings).toEqual([]);
   });
 
   it("fails loudly when the workspace config file is missing", async () => {

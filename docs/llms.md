@@ -212,6 +212,24 @@ qd promote-findings <node>
 
 `qd promote-findings` returns the finding id and new node id for every promoted P2/P3, and the new node records where it came from. Use `qd finding promote <finding>` for a single finding, or `qd finding dispose <finding> --disposition accepted-risk --rationale "<why>"` when the project intentionally accepts the risk. Preserve that trail when explaining why follow-up nodes exist.
 
+Before advancing to CI or merge, ask qd for the policy view instead of guessing:
+
+```sh
+qd policy evaluate <node> --phase ci --json
+qd policy evaluate <node> --phase merge --json
+```
+
+Treat policy violations as the next piece of work, not optional advice. The default policy encodes qd's intended workflow: a passed audit before CI, declared verification evidence before CI, P2/P3 disposition before merge, and a real merge commit recorded after the repository merge. If a project intentionally relaxes a policy, record why in project setup notes so future orchestrators do not infer the wrong standard.
+
+If the project uses worktrees, use qd's helper to make the branch/path/env convention repeatable:
+
+```sh
+qd worktree create <node> --branch spec/<node>
+qd worktree env <node> --env-template .env.example --env QD_CACHE=/tmp/qd-cache
+```
+
+Do not put secrets in qd notes, node specs, findings, or exports. Worktree env injection writes files in the worktree and reports the file path; qd does not store env values in the DAG.
+
 ## Run Checks And Merge
 
 Normal path:

@@ -24,8 +24,8 @@
   "coverageAnalysis": "perTest",
   "thresholds": {
     "high": 80,
-    "low": 70,
-    "break": 70
+    "low": 80,
+    "break": 80
   },
   "concurrency": "50%",
   "timeoutMS": 10000

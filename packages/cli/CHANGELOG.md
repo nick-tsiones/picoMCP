@@ -1,5 +1,16 @@
 # @cat-cave/qdcli
 
+## 0.1.13
+
+### Patch Changes
+
+- Add first-class policy evaluation, stronger worktree environment support, a richer responsive viewer, and an 80% mutation testing release ratchet.
+
+  Policies now make qd's default opinions explicit: passed audits and declared verification sign-offs are required before CI, open P2/P3 findings must be disposed before merge, and merge records require the represented commit SHA. Worktree helpers can create conventional paths, record assignments, and inject node-scoped environment files without storing secrets in the DAG. The viewer now surfaces DAG health, milestone progress, active assignments, waves, blockers, latest runs, and richer node detail for orchestration dashboards.
+
+- Updated dependencies
+  - @cat-cave/qdcli-core@0.1.13
+
 ## 0.1.12
 
 ### Patch Changes

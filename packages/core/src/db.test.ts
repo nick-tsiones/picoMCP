@@ -38,6 +38,18 @@ describe("config", () => {
       maskedEnv: ["DATABASE_URL"],
       broadAuditEvery: 4,
       deepAuditEvery: 12,
+      policy: {
+        ...defaultConfig.policy,
+        requireAuditBeforeCi: false,
+        requireVerificationBeforeCi: true,
+        requireP2P3DispositionBeforeMerge: false,
+        requireMergeCommit: true,
+      },
+      worktree: {
+        baseDir: "../worktrees",
+        envTemplate: ".env.example",
+        envFile: ".env.local",
+      },
     };
 
     expect(parseConfig(formatConfig(config))).toMatchObject({
@@ -53,6 +65,17 @@ describe("config", () => {
       maskedEnv: ["DATABASE_URL"],
       broadAuditEvery: 4,
       deepAuditEvery: 12,
+      policy: expect.objectContaining({
+        requireAuditBeforeCi: false,
+        requireVerificationBeforeCi: true,
+        requireP2P3DispositionBeforeMerge: false,
+        requireMergeCommit: true,
+      }),
+      worktree: expect.objectContaining({
+        baseDir: "../worktrees",
+        envTemplate: ".env.example",
+        envFile: ".env.local",
+      }),
     });
   });
 
@@ -69,6 +92,12 @@ describe("config", () => {
     expect(() =>
       parseConfig(`${formatConfig(defaultConfig)}\n[hooks]\npre_magic = "no"\n`),
     ).toThrow(/unknown config key: hooks_pre_magic/);
+  });
+
+  it("reports malformed config assignment line numbers", () => {
+    expect(() => parseConfig(`${formatConfig(defaultConfig)}\ncheck_command =\n`)).toThrow(
+      /line \d+ is not a supported key = value assignment/,
+    );
   });
 
   it("uses defaults for optional policy sections when older configs omit them", () => {
@@ -95,6 +124,8 @@ require_ci_before_merge = true
       maskedEnv: [],
       broadAuditEvery: 3,
       deepAuditEvery: 9,
+      policy: defaultConfig.policy,
+      worktree: defaultConfig.worktree,
     });
   });
 
@@ -129,12 +160,50 @@ require_ci_before_merge = true
         ),
       ),
     ).toThrow(/clean_worktree_except must be an array of strings/);
+    expect(() =>
+      parseConfig(
+        formatConfig(defaultConfig).replace('skills_dir = ".qd/skills"', 'skills_dir = ""'),
+      ),
+    ).toThrow(/skills_dir must not be empty/);
+  });
+
+  it("parses quoted strings, trimmed arrays, and escaped config values strictly", () => {
+    const text = formatConfig({
+      ...defaultConfig,
+      skillsDir: '.qd/skills "quoted"',
+      cleanWorktreeExcept: [".qd/", "roadmap/spec-dag.json"],
+      maskedEnv: ["DATABASE_URL", "API_TOKEN"],
+      worktree: {
+        baseDir: "../worktrees",
+        envTemplate: ".env.example",
+        envFile: ".env.local",
+      },
+    }).replace(
+      'clean_worktree_except = [".qd/", "roadmap/spec-dag.json"]',
+      'clean_worktree_except = [ ".qd/", "", "roadmap/spec-dag.json" ]',
+    );
+
+    expect(parseConfig(text)).toMatchObject({
+      skillsDir: '.qd/skills "quoted"',
+      cleanWorktreeExcept: [".qd/", "roadmap/spec-dag.json"],
+      maskedEnv: ["DATABASE_URL", "API_TOKEN"],
+      worktree: {
+        baseDir: "../worktrees",
+        envTemplate: ".env.example",
+        envFile: ".env.local",
+      },
+    });
   });
 
   it("reads default config when no config file exists and writes config files", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "qdcli-config-"));
     try {
-      expect(await readConfig(root)).toEqual(defaultConfig);
+      const config = await readConfig(root);
+      expect(config).toEqual(defaultConfig);
+      expect(config.requireGateBeforeCi).toBe(true);
+      expect(config.requireCiBeforeMerge).toBe(true);
+      expect(config.forbiddenPathGlobs).toEqual([".env", ".env.*", "**/.env", "**/.env.*"]);
+      expect(config.maskedEnv).toEqual([]);
       await writeConfig(root, {
         ...defaultConfig,
         ciCommand: "just ci",

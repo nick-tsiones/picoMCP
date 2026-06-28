@@ -1,6 +1,6 @@
 {
   "name": "@cat-cave/qdcli-core",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "Core graph engine for Quick DAG CLI",
   "license": "MIT",
   "repository": {

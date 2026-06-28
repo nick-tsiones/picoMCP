@@ -126,6 +126,34 @@ See [Importing An Existing DAG](./import.md) for the full `ImportMapping` schema
 - `qd wave complete <wave> --summary <text>`
 - `qd wave status [--json]`
 
+## Policies
+
+qd has first-class lifecycle policy checks. Use them to make the intended workflow executable instead of relying on chat memory:
+
+```sh
+qd policy evaluate <node> --phase ci --json
+qd policy evaluate <node> --phase merge --json
+```
+
+Default policy is intentionally strict:
+
+- a passed audit is required before CI
+- declared verification entries must have passed evidence before CI
+- open P2/P3 findings must be promoted, resolved, or dismissed before merge
+- merge recording requires the real merge commit SHA
+
+Configure policy with:
+
+```sh
+qd config get policy --json
+qd config set policy-require-audit-before-ci true
+qd config set policy-require-verification-before-ci true
+qd config set policy-require-p2-p3-disposition-before-merge true
+qd config set policy-require-merge-commit true
+```
+
+These policies are generic. qd does not care whether the worker used a local worktree, remote host, CI job, or human review. It cares that the DAG state contains the evidence needed to safely advance the node.
+
 Use JSON or file-backed node creation when generated specs contain shell-sensitive text:
 
 ```sh
@@ -175,6 +203,20 @@ For scripts or one-off checks, pass repos directly:
 ```sh
 qd workspace status --repo /path/to/repo-a --repo /path/to/repo-b --json
 ```
+
+## Worktrees
+
+Worktree commands are git helpers for orchestrators that use one branch/worktree per active spec. They are optional; qd still works with remote workers or any other execution model.
+
+```sh
+qd worktree create <node> --branch spec/<node>
+qd worktree create <node> --path ../worktrees/<node> --env-template .env.example --env QD_CACHE=/tmp/qd-cache
+qd worktree env <node> --env-template .env.example --env QD_CACHE=/tmp/qd-cache
+qd worktree status <node> --json
+qd worktree cleanup <node> --merged-only
+```
+
+`qd worktree create` defaults to `[worktree].base_dir/<node>` from `.qd/config.toml`, records the branch on the node, and refuses duplicate branch/path checkouts. Env injection writes the configured env file inside the worktree and adds qd context variables such as `QD_ROOT`, `QD_NODE_ID`, `QD_BRANCH`, and `QD_WORKTREE`. qd returns the env file path, but it does not store env values in the database or export.
 
 ## Audit
 

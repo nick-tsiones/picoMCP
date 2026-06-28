@@ -16,6 +16,7 @@ import {
   ciFail,
   ciPass,
   completeAssignment,
+  completeNode,
   completeWave,
   deterministicGraphSnapshot,
   disposeFinding,
@@ -33,6 +34,8 @@ import {
   listWaveMemberships,
   listWaves,
   markMerged,
+  openDatabase,
+  policyReport,
   promoteFindings,
   recordCiResult,
   recordCheckResult,
@@ -45,6 +48,7 @@ import {
   resolveProjectRoot,
   restoreGraphSnapshot,
   resolveFinding,
+  run,
   setupProject,
   startRun,
   startWave,
@@ -64,6 +68,11 @@ beforeEach(async () => {
 afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
+
+async function passAudit(nodeId: string): Promise<void> {
+  const run = await startRun(root, nodeId, "audit", { auditKind: "acceptance" });
+  await finishRun(root, run.id, { status: "passed", summary: "audit passed" });
+}
 
 describe("graph lifecycle", () => {
   it("returns only dependency-unblocked ready nodes", async () => {
@@ -100,6 +109,41 @@ describe("graph lifecycle", () => {
     await addEdge(root, "a", "b");
 
     await expect(addEdge(root, "b", "a")).rejects.toThrow(/cycle/);
+  });
+
+  it("allows related cycles but validateGraph reports requires cycles", async () => {
+    await addNode(root, {
+      id: "a",
+      title: "Build A",
+      spec: "Do A",
+      acceptance: "A works",
+    });
+    await addNode(root, {
+      id: "b",
+      title: "Build B",
+      spec: "Do B",
+      acceptance: "B works",
+    });
+
+    await addEdge(root, "a", "b", "related");
+    await addEdge(root, "b", "a", "related");
+    expect(await validateGraph(root)).toMatchObject({ ok: true });
+
+    const db = await openDatabase(root);
+    await run(
+      db,
+      "insert into edges (from_node, to_node, type, created_at) values (?, ?, 'requires', ?)",
+      ["a", "b", new Date().toISOString()],
+    );
+    await run(
+      db,
+      "insert into edges (from_node, to_node, type, created_at) values (?, ?, 'requires', ?)",
+      ["b", "a", new Date().toISOString()],
+    );
+
+    const validation = await validateGraph(root);
+    expect(validation.ok).toBe(false);
+    expect(validation.errors.join("\n")).toMatch(/requires edge cycle/);
   });
 
   it("rejects self edges and can remove existing edges", async () => {
@@ -229,6 +273,30 @@ describe("graph lifecycle", () => {
     expect(promoted[0]?.node.status_reason).toContain("Promoted from finding");
   });
 
+  it("refuses promotion while blocking findings are still open with actionable context", async () => {
+    await addNode(root, {
+      id: "a",
+      title: "Build A",
+      spec: "Do A",
+      acceptance: "A works",
+    });
+    const blocking = await addFinding(root, "a", {
+      severity: "P1",
+      title: "Blocking defect",
+      evidence: "The implementation is not safe to merge.",
+    });
+    await addFinding(root, "a", {
+      severity: "P2",
+      title: "Follow-up cleanup",
+      evidence: "The implementation could be cleaner later.",
+    });
+
+    await expect(promoteFindings(root, "a")).rejects.toThrow(
+      new RegExp(`P1 ${blocking.id}: Blocking defect`),
+    );
+    expect(await listFindings(root, { nodeId: "a", status: "open" })).toHaveLength(2);
+  });
+
   it("lists findings and node runs for orchestrator dashboards", async () => {
     await addNode(root, {
       id: "a",
@@ -350,10 +418,102 @@ describe("graph lifecycle", () => {
     });
 
     await expect(markMerged(root, "a", "squash")).rejects.toThrow(/status ready/);
+    await passAudit("a");
     await ciPass(root, "a");
-    const merged = await markMerged(root, "a", "squash");
+    await expect(markMerged(root, "a", "squash")).rejects.toThrow(/use-existing-commit/);
+    const merged = await markMerged(root, "a", "squash", { commitSha: "abc1234" });
 
     expect(merged.status).toBe("done");
+  });
+
+  it("reports policy violations for missing audit and verification evidence", async () => {
+    await addNode(root, {
+      id: "a",
+      title: "Build A",
+      spec: "Do A",
+      acceptance: "A works",
+      verification: [{ type: "manual", value: "fixture review" }],
+    });
+
+    const blocked = await policyReport(root, "a", "ci");
+    expect(blocked.ok).toBe(false);
+    expect(blocked.violations.map((violation) => violation.code).sort()).toEqual([
+      "auditRequired",
+      "verificationRequired",
+    ]);
+
+    await passAudit("a");
+    const run = await startRun(root, "a", "verification", {
+      provider: "sign-off",
+      command: "manual:fixture review",
+    });
+    await finishRun(root, run.id, { status: "passed", summary: "fixture checked" });
+
+    expect(await policyReport(root, "a", "ci")).toMatchObject({ ok: true });
+  });
+
+  it("reports latest failed audit and CI evidence in policy violations", async () => {
+    await addNode(root, {
+      id: "a",
+      title: "Build A",
+      spec: "Do A",
+      acceptance: "A works",
+    });
+    const audit = await startRun(root, "a", "audit", { auditKind: "security" });
+    await finishRun(root, audit.id, { status: "failed", summary: "security issue remains" });
+    await ciFail(root, "a", "pipeline failed");
+
+    const ciPolicy = await policyReport(root, "a", "ci");
+    const mergePolicy = await policyReport(root, "a", "merge");
+
+    expect(ciPolicy.violations).toMatchObject([
+      {
+        code: "auditRequired",
+        evidence: { latestAudit: { id: audit.id, status: "failed" } },
+      },
+    ]);
+    expect(mergePolicy.violations).toMatchObject([
+      {
+        code: "auditRequired",
+        evidence: { latestAudit: { id: audit.id, status: "failed" } },
+      },
+      {
+        code: "ciRequired",
+        evidence: { latestCi: { status: "failed", summary: "pipeline failed" } },
+      },
+    ]);
+  });
+
+  it("blocks merge policy on undisposed P2/P3 findings and missing CI", async () => {
+    await addNode(root, {
+      id: "a",
+      title: "Build A",
+      spec: "Do A",
+      acceptance: "A works",
+    });
+    await passAudit("a");
+    await addFinding(root, "a", {
+      severity: "P2",
+      title: "Later cleanup",
+      evidence: "Cleanup should be tracked.",
+    });
+
+    const beforeCi = await policyReport(root, "a", "merge");
+    expect(beforeCi.ok).toBe(false);
+    expect(beforeCi.violations.map((violation) => violation.code).sort()).toEqual([
+      "ciRequired",
+      "followupDispositionRequired",
+    ]);
+
+    const [finding] = await listFindings(root, { nodeId: "a", status: "open" });
+    expect(finding).toBeDefined();
+    await disposeFinding(root, finding!.id, {
+      status: "dismissed",
+      rationale: "Tracked outside this release.",
+    });
+    await ciPass(root, "a");
+
+    expect(await policyReport(root, "a", "merge")).toMatchObject({ ok: true });
   });
 
   it("claims the highest priority ready node with the requested branch", async () => {
@@ -381,6 +541,30 @@ describe("graph lifecycle", () => {
     expect(claimed.owner).toBe("orchestrator");
     expect(claimed.branch).toBe("spec/urgent");
     await expect(claimNode(root, { id: "urgent", agent: "other" })).rejects.toThrow(/not ready/);
+  });
+
+  it("keeps generated ids stable across more than two duplicate titles", async () => {
+    const first = await addNode(root, {
+      title: "Duplicate title",
+      spec: "Do first",
+      acceptance: "First works",
+    });
+    const second = await addNode(root, {
+      title: "Duplicate title",
+      spec: "Do second",
+      acceptance: "Second works",
+    });
+    const third = await addNode(root, {
+      title: "Duplicate title",
+      spec: "Do third",
+      acceptance: "Third works",
+    });
+
+    expect([first.id, second.id, third.id]).toEqual([
+      "duplicate-title",
+      "duplicate-title-2",
+      "duplicate-title-3",
+    ]);
   });
 
   it("records failed check and CI runs without marking the node mergeable", async () => {
@@ -431,6 +615,26 @@ describe("graph lifecycle", () => {
     });
 
     expect(recovered.status).toBe("review");
+  });
+
+  it("records implementation completion as a review-ready run", async () => {
+    await addNode(root, {
+      id: "a",
+      title: "Build A",
+      spec: "Do A",
+      acceptance: "A works",
+    });
+
+    const completed = await completeNode(root, "a", "implemented the spec");
+    const run = await latestRun(root, "a", "implement");
+
+    expect(completed.status).toBe("review");
+    expect(run).toMatchObject({
+      node_id: "a",
+      kind: "implement",
+      status: "completed",
+      summary: "implemented the spec",
+    });
   });
 
   it("supports explicit unblock from a passed run", async () => {
@@ -486,8 +690,9 @@ describe("graph lifecycle", () => {
       spec: "Do B",
       acceptance: "B works",
     });
+    await passAudit("a");
     await ciPass(root, "a");
-    await markMerged(root, "a", "squash");
+    await markMerged(root, "a", "squash", { commitSha: "abc1234" });
     const cancelled = await cancelNode(root, "b");
     const report = await stats(root);
 
@@ -526,8 +731,13 @@ describe("graph lifecycle", () => {
       title: "Still blocking",
       evidence: "Must also fix.",
     });
+    await addFinding(root, "a", {
+      severity: "P0",
+      title: "Critical blocker",
+      evidence: "Must fix before merge.",
+    });
 
-    expect((await stats(root)).openP0P1Findings).toBe(1);
+    expect((await stats(root)).openP0P1Findings).toBe(2);
   });
 
   it("records check runs without making the node mergeable", async () => {
@@ -681,6 +891,48 @@ describe("graph lifecycle", () => {
     expect((await listRegistry(root, "projects")).map((entry) => entry.name)).toEqual(["app"]);
   });
 
+  it("adds bulk edges from existing nodes without treating them as missing", async () => {
+    await addNode(root, {
+      id: "existing",
+      title: "Existing",
+      spec: "Already exists",
+      acceptance: "Existing works",
+    });
+
+    const created = await addNodesBulk(root, {
+      nodes: [
+        {
+          id: "new",
+          title: "New",
+          spec: "Do new work",
+          acceptance: "New work is done",
+        },
+      ],
+      edges: [{ from: "existing", to: "new" }],
+    });
+
+    expect(created.edges).toHaveLength(1);
+    expect((await readyNodes(root)).map((node) => node.id)).toEqual(["existing"]);
+
+    const second = await addNodesBulk(root, {
+      nodes: [
+        {
+          id: "new-2",
+          title: "New 2",
+          spec: "Do second new work",
+          acceptance: "Second new work is done",
+        },
+      ],
+      edges: [{ from: "new-2", to: "existing" }],
+    });
+
+    expect(second.edges).toHaveLength(1);
+    expect((await listEdges(root)).map((edge) => `${edge.from_node}->${edge.to_node}`)).toEqual([
+      "existing->new",
+      "new-2->existing",
+    ]);
+  });
+
   it("rolls back bulk nodes when an edge is invalid", async () => {
     await expect(
       addNodesBulk(root, {
@@ -717,6 +969,7 @@ describe("graph lifecycle", () => {
       spec: "Do A",
       acceptance: "A works",
     });
+    await passAudit("a");
     await ciPass(root, "a");
 
     const merged = await markMerged(root, "a", "squash", {
@@ -737,8 +990,9 @@ describe("graph lifecycle", () => {
       spec: "Do A",
       acceptance: "A works",
     });
+    await passAudit("a");
     await ciPass(root, "a");
-    await markMerged(root, "a", "squash");
+    await markMerged(root, "a", "squash", { commitSha: "abc1234" });
 
     const passed = await recordCiResult(root, "a", {
       status: "passed",
@@ -776,6 +1030,7 @@ describe("graph lifecycle", () => {
     expect(node?.status_reason).toContain("Initial note");
     expect(node?.status_reason).toContain("Blocked by upstream API");
     expect(node?.status_reason).toContain("Retry passed locally");
+    expect(node?.status_reason?.startsWith("\n")).toBe(false);
   });
 
   it("stores typed notes and filters them by kind", async () => {
@@ -799,6 +1054,7 @@ describe("graph lifecycle", () => {
       kind: "external-dependency",
       evidence: "https://example.test/ticket",
     });
+    expect(await listNodeNotes(root, "a", { kinds: [] })).toHaveLength(2);
   });
 
   it("tracks opaque assignments and refuses duplicate open branch or worktree ownership", async () => {
@@ -851,6 +1107,10 @@ describe("graph lifecycle", () => {
     expect(completed.status).toBe("complete");
     expect(JSON.parse(completed.commits_json)).toEqual(["abc123"]);
     expect(JSON.parse(completed.evidence_json)).toEqual(["log.txt"]);
+    expect(await listAssignments(root)).toHaveLength(1);
+    expect(await listAssignments(root, { nodeId: "a" })).toHaveLength(1);
+    expect(await listAssignments(root, { nodeId: "missing" })).toEqual([]);
+    expect(await listAssignments(root, { status: "open" })).toEqual([]);
     expect(await listAssignments(root, { status: "complete" })).toHaveLength(1);
     expect(await listAssignments(root, { nodeId: "a", status: "open" })).toEqual([]);
   });
@@ -920,7 +1180,7 @@ describe("graph lifecycle", () => {
     await registerGroup(root, "app");
     await registerProject(root, "suite");
     await registerProject(root, "core");
-    await registerMilestone(root, "beta", 30);
+    await registerMilestone(root, "beta", 10);
     await registerMilestone(root, "alpha", 20);
 
     expect((await listRegistry(root, "groups")).map((entry) => entry.name)).toEqual([
@@ -932,9 +1192,13 @@ describe("graph lifecycle", () => {
       "suite",
     ]);
     expect((await listRegistry(root, "milestones")).map((entry) => entry.name)).toEqual([
-      "alpha",
       "beta",
+      "alpha",
     ]);
+    expect(await registerMilestone(root, "release", 40)).toMatchObject({
+      name: "release",
+      rank: 40,
+    });
   });
 
   it("reports all registered metadata mismatches in strict validation", async () => {
@@ -1011,6 +1275,101 @@ describe("graph lifecycle", () => {
       expect(restored.assignments).toEqual(snapshot.assignments);
       expect(restored.waves).toEqual(snapshot.waves);
       expect(restored.wave_memberships).toEqual(snapshot.wave_memberships);
+    } finally {
+      await rm(restoredRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("round-trips optional snapshot fields without dropping canonical data", async () => {
+    await registerGroup(root, "runtime");
+    await registerProject(root, "app");
+    await registerMilestone(root, "baseline", 10);
+    await addNode(root, {
+      id: "a",
+      title: "Build A",
+      kind: "feature",
+      milestone: "baseline",
+      groupName: "runtime",
+      projects: ["app"],
+      status: "blocked",
+      priority: "P1",
+      estimatePoints: 5,
+      risk: "high",
+      spec: "Do A",
+      acceptance: "A works",
+      validation: "just check-a",
+      verification: [{ type: "manual", value: "fixture approval" }],
+      auditFocus: ["security", "data loss"],
+      context: "docs/context.md",
+      statusReason: "Waiting on fixture.",
+      checkCommand: "just check-a",
+      ciCommand: "just ci-a",
+      blockedBy: "manual",
+      blockedReason: "Fixture approval is pending.",
+      blockedOwner: "trevor",
+    });
+    await updateNode(root, "a", { owner: "external:worker", branch: "spec/a" });
+    const audit = await startRun(root, "a", "audit", {
+      command: "just audit-a",
+      provider: "local",
+      gitSha: "abc123",
+      externalId: "audit-1",
+      url: "https://example.test/audit/1",
+      reportPath: "reports/a.json",
+      auditKind: "security",
+      worktreePath: "/tmp/qd/a",
+      agent: "external:auditor",
+      summary: "audit started",
+    });
+    await finishRun(root, audit.id, {
+      status: "superseded",
+      exitCode: 2,
+      rationale: "newer branch was audited",
+      supersededBy: "audit-2",
+      summary: "superseded by newer run",
+    });
+    await addFinding(root, "a", {
+      runId: audit.id,
+      severity: "P2",
+      title: "Improve validation",
+      path: "src/a.ts",
+      line: 42,
+      evidence: "Validation can be stronger.",
+      expected: "Validation rejects invalid input.",
+      suggestedFix: "Add a boundary test.",
+    });
+    await addNodeNote(root, "a", "Manual gate recorded", {
+      kind: "external-dependency",
+      evidence: "https://example.test/ticket/1",
+    });
+    const assignment = await addAssignment(root, {
+      nodeId: "a",
+      role: "auditor",
+      owner: "external:auditor",
+      branch: "audit/a",
+      worktreePath: "/tmp/qd/audit-a",
+      scope: "src/a.ts",
+    });
+    await completeAssignment(root, assignment.id, {
+      status: "failed",
+      summary: "audit found follow-up",
+      commits: ["abc123"],
+      evidence: ["reports/a.json"],
+    });
+    const wave = await startWave(root, { kind: "audit", summary: "security wave" });
+    await addWaveNode(root, wave.id, "a");
+    await completeWave(root, wave.id, { status: "cancelled", summary: "rescheduled" });
+    await updateNode(root, "a", { status: "blocked" });
+
+    const snapshot = await graphSnapshot(root);
+    const restoredRoot = await mkdtemp(path.join(os.tmpdir(), "qdcli-restore-full-"));
+    try {
+      await setupProject(restoredRoot);
+      await restoreGraphSnapshot(restoredRoot, snapshot);
+
+      expect(deterministicGraphSnapshot(await graphSnapshot(restoredRoot))).toEqual(
+        deterministicGraphSnapshot(snapshot),
+      );
     } finally {
       await rm(restoredRoot, { recursive: true, force: true });
     }
@@ -1138,6 +1497,72 @@ describe("graph lifecycle", () => {
           ],
         }),
       ).rejects.toThrow(/wave membership references missing assignment/);
+      await expect(
+        restoreGraphSnapshot(restoredRoot, {
+          ...snapshot,
+          runs: [
+            {
+              id: "run-1",
+              node_id: "missing",
+              kind: "check",
+              status: "passed",
+              command: null,
+              provider: null,
+              exit_code: null,
+              git_sha: null,
+              external_id: null,
+              url: null,
+              rationale: null,
+              superseded_by: null,
+              report_path: null,
+              audit_kind: null,
+              worktree_path: null,
+              agent: null,
+              started_at: "2026-06-20T00:00:00.000Z",
+              finished_at: "2026-06-20T00:00:00.000Z",
+              summary: "run",
+              log_path: null,
+            },
+          ],
+        }),
+      ).rejects.toThrow(/run references missing node/);
+      await expect(
+        restoreGraphSnapshot(restoredRoot, {
+          ...snapshot,
+          findings: [
+            {
+              id: "finding-1",
+              node_id: "a",
+              run_id: "missing",
+              severity: "P2",
+              status: "open",
+              title: "Finding",
+              path: null,
+              line: null,
+              evidence: "evidence",
+              expected: null,
+              suggested_fix: null,
+              created_at: "2026-06-20T00:00:00.000Z",
+              resolved_at: null,
+            },
+          ],
+        }),
+      ).rejects.toThrow(/finding references missing run/);
+      await expect(
+        restoreGraphSnapshot(restoredRoot, {
+          ...snapshot,
+          node_notes: [
+            {
+              id: "note-1",
+              node_id: "missing",
+              kind: "note",
+              text: "note",
+              evidence: null,
+              created_at: "2026-06-20T00:00:00.000Z",
+            },
+          ],
+        }),
+      ).rejects.toThrow(/note references missing node/);
       expect((await graphSnapshot(restoredRoot)).nodes).toHaveLength(0);
     } finally {
       await rm(restoredRoot, { recursive: true, force: true });
@@ -1160,6 +1585,29 @@ describe("graph lifecycle", () => {
       "a: blocked node should include blocked_by and blocked_reason for external/manual blockers",
     ]);
     expect(await readyNodes(root)).toEqual([]);
+  });
+
+  it("strictly validates corrupted persisted node fields", async () => {
+    await addNode(root, {
+      id: "a",
+      title: "Build A",
+      spec: "Do A",
+      acceptance: "A works",
+    });
+    const db = await openDatabase(root);
+    await run(
+      db,
+      "update nodes set spec = '   ', acceptance = '   ', status = 'ready', blocked_by = 'manual', blocked_reason = 'needs approval' where id = 'a'",
+    );
+
+    const validation = await validateGraph(root);
+
+    expect(validation.ok).toBe(false);
+    expect(validation.errors).toEqual([
+      "a: non-draft node is missing acceptance criteria",
+      "a: node is missing spec",
+      "a: blocked_by is set but status is ready",
+    ]);
   });
 
   it("can promote advisory warnings to strict validation errors", async () => {
@@ -1185,6 +1633,12 @@ describe("graph lifecycle", () => {
 
     await expect(resolveProjectRoot({ cwd: nested })).resolves.toBe(root);
     await expect(resolveProjectRoot({ cwd: nested, root })).resolves.toBe(root);
+    await expect(
+      resolveProjectRoot({ cwd: nested, root: path.join(root, "missing") }),
+    ).rejects.toThrow(/No qd project found/);
+    await expect(
+      resolveProjectRoot({ cwd: nested, root: path.join(root, "missing"), allowMissing: true }),
+    ).resolves.toBe(path.join(root, "missing"));
   });
 
   it("fails loudly when no qd root is present unless missing roots are allowed", async () => {

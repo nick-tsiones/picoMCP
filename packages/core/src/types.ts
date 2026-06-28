@@ -226,3 +226,25 @@ export interface AnalyticsReport {
   criticalPath: CriticalPathReport;
   eta: EtaReport;
 }
+
+export type PolicyPhase = "completion" | "ci" | "merge";
+
+export interface PolicyViolation {
+  code:
+    | "auditRequired"
+    | "verificationRequired"
+    | "followupDispositionRequired"
+    | "ciRequired"
+    | "mergeCommitRequired";
+  message: string;
+  node_id: string;
+  phase: PolicyPhase;
+  evidence?: Record<string, unknown>;
+}
+
+export interface PolicyReport {
+  ok: boolean;
+  phase: PolicyPhase;
+  node_id: string;
+  violations: PolicyViolation[];
+}

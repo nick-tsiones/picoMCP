@@ -18,6 +18,9 @@ import type {
   NodeKind,
   NodeStatus,
   NoteKind,
+  PolicyPhase,
+  PolicyReport,
+  PolicyViolation,
   Priority,
   QdAssignment,
   QdEdge,
@@ -638,6 +641,96 @@ export async function gateNode(
   return { ok: blocking.length === 0 && runningAudits.length === 0, blocking, runningAudits };
 }
 
+export async function policyReport(
+  root: string,
+  nodeId: string,
+  phase: PolicyPhase,
+): Promise<PolicyReport> {
+  const config = await readConfig(root);
+  const node = await getNode(root, nodeId);
+  const violations: PolicyViolation[] = [];
+
+  if (phase === "ci" || phase === "merge") {
+    if (config.policy.requireAuditBeforeCi) {
+      const latestAudit = await latestRun(root, nodeId, "audit");
+      if (!latestAudit || latestAudit.status !== "passed") {
+        violations.push({
+          code: "auditRequired",
+          phase,
+          node_id: nodeId,
+          message: `Node ${nodeId} needs a passed audit before ${phase}.`,
+          evidence: latestAudit ? { latestAudit } : { latestAudit: null },
+        });
+      }
+    }
+
+    if (config.policy.requireVerificationBeforeCi) {
+      const missing = await missingVerificationEntries(root, node);
+      if (missing.length > 0) {
+        violations.push({
+          code: "verificationRequired",
+          phase,
+          node_id: nodeId,
+          message: `Node ${nodeId} is missing ${missing.length} declared verification sign-off(s).`,
+          evidence: { missing },
+        });
+      }
+    }
+  }
+
+  if (phase === "merge") {
+    if (config.requireCiBeforeMerge) {
+      const latestCi = await latestRun(root, nodeId, "ci");
+      if (!latestCi || latestCi.status !== "passed") {
+        violations.push({
+          code: "ciRequired",
+          phase,
+          node_id: nodeId,
+          message: `Node ${nodeId} needs a latest passed CI run before merge.`,
+          evidence: latestCi ? { latestCi } : { latestCi: null },
+        });
+      }
+    }
+
+    if (config.policy.requireP2P3DispositionBeforeMerge) {
+      const openFollowups = await listFindings(root, {
+        nodeId,
+        status: "open",
+        severities: ["P2", "P3"],
+      });
+      if (openFollowups.length > 0) {
+        violations.push({
+          code: "followupDispositionRequired",
+          phase,
+          node_id: nodeId,
+          message: `Node ${nodeId} has open P2/P3 findings that must be promoted, resolved, or dismissed before merge.`,
+          evidence: { findings: openFollowups },
+        });
+      }
+    }
+  }
+
+  return { ok: violations.length === 0, phase, node_id: nodeId, violations };
+}
+
+async function missingVerificationEntries(
+  root: string,
+  node: QdNode,
+): Promise<VerificationEntry[]> {
+  if (node.verification.length === 0) return [];
+  const passedRuns = (await listRuns(root, { nodeId: node.id, kind: "verification" })).filter(
+    (runRow) => runRow.status === "passed",
+  );
+  return node.verification.filter((entry) => {
+    const expectedCommand = verificationRunCommandKey(entry);
+    return !passedRuns.some((runRow) => runRow.command === expectedCommand);
+  });
+}
+
+function verificationRunCommandKey(entry: VerificationEntry): string {
+  return entry.type === "command" ? entry.value : `${entry.type}:${entry.value}`;
+}
+
 export async function promoteFindings(root: string, nodeId: string): Promise<PromotedFinding[]> {
   const db = await openDatabase(root);
   const gate = await gateNode(root, nodeId);
@@ -704,6 +797,10 @@ export async function recordCiResult(
     finishedAt?: string;
   },
 ): Promise<QdNode> {
+  if (input.status === "passed") {
+    const policy = await policyReport(root, nodeId, "ci");
+    if (!policy.ok) throw new Error(policy.violations.map((item) => item.message).join("; "));
+  }
   const db = await openDatabase(root);
   const current = await getNode(root, nodeId);
   const now = new Date().toISOString();
@@ -838,10 +935,12 @@ export async function markMerged(
   const node = await getNode(root, nodeId);
   if (node.status !== "mergeable")
     throw new Error(`Cannot merge node with status ${node.status}; expected mergeable`);
-  if (config.requireCiBeforeMerge) {
-    const latestCi = await latestRun(root, nodeId, "ci");
-    if (!latestCi || latestCi.status !== "passed")
-      throw new Error("Cannot merge without a latest passed CI run");
+  const policy = await policyReport(root, nodeId, "merge");
+  if (!policy.ok) throw new Error(policy.violations.map((item) => item.message).join("; "));
+  if (config.policy.requireMergeCommit && !input.commitSha?.trim()) {
+    throw new Error(
+      "Cannot merge without --use-existing-commit <sha> or --already-merged-at <sha>",
+    );
   }
   const db = await openDatabase(root);
   const now = new Date().toISOString();

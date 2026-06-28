@@ -129,6 +129,7 @@ Configure the local preflight command and the canonical green command:
 qd config set check-command --value "<fast project check command>"
 qd config set ci-command --value "<full project CI command>"
 qd config get ci-command
+qd config get policy --json
 ```
 
 Use the repository's real commands. qd is language- and stack-neutral.
@@ -136,6 +137,8 @@ Use the repository's real commands. qd is language- and stack-neutral.
 `check_command` is the faster local/orchestrator preflight. It runs when the orchestrator calls `qd check run <node>`. A passed check is recorded, but it does not make a node mergeable.
 
 `ci_command` is the full trusted merge gate. It runs when the orchestrator calls `qd ci run <node>`. A passed CI run moves the node to `mergeable`; a failed run blocks it. The intended policy is green main: if CI does not pass, the node does not merge.
+
+The default lifecycle policy is strict because qd is designed to keep main green: audit before CI, declared verification before CI, no undisposed P2/P3 findings before merge, and a real merge commit recorded with `qd merge --use-existing-commit <sha>`. Relax those settings only when the project has an explicit reason and records that reason in its setup notes.
 
 If the repository uses a supported hosted CI adapter, configure it separately from local commands. The first built-in adapter is GitHub through the `gh` CLI:
 
@@ -145,6 +148,16 @@ qd config get ci-provider
 ```
 
 Provider polling is optional. If no adapter fits the project, keep using `qd ci run` for local trusted CI or `qd ci record-pass` with explicit evidence for externally completed CI.
+
+If the repository uses git worktrees, configure the convention once:
+
+```sh
+qd config set worktree-base-dir --value "../worktrees"
+qd config set worktree-env-template --value ".env.example"
+qd config set worktree-env-file --value ".env"
+```
+
+Then the orchestrator can run `qd worktree create <node> --branch spec/<node>` and get a checked-out branch plus a worktree-local env file. qd writes qd context variables into that env file, but it never stores env contents in the DAG database or committed export.
 
 After qd state changes that should be shared, export and commit the portable DAG snapshot:
 
