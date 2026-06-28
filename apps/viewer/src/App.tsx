@@ -231,6 +231,7 @@ function App() {
             error={error}
           />
           <HealthPanel snapshot={snapshot} analytics={analytics} />
+          <TriagePanel snapshot={snapshot} selected={selected} onSelect={setSelected} />
           <ReadyQueue ready={ready} selected={selected} onSelect={setSelected} />
           <WavePanel snapshot={snapshot} selected={selected} onSelect={setSelected} />
         </aside>
@@ -311,7 +312,12 @@ function App() {
 
         <aside className="sidebar detailPanel">
           {selectedNode ? (
-            <NodeDetail node={selectedNode} snapshot={snapshot} analytics={analytics} />
+            <NodeDetail
+              node={selectedNode}
+              snapshot={snapshot}
+              analytics={analytics}
+              onSelect={setSelected}
+            />
           ) : (
             <p className="emptyState">Select a node to inspect its spec, blockers, and history.</p>
           )}
@@ -575,6 +581,66 @@ function HealthPanel({
   );
 }
 
+function TriagePanel({
+  snapshot,
+  selected,
+  onSelect,
+}: {
+  snapshot: GraphSnapshot;
+  selected: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const byNode = new Map(snapshot.nodes.map((node) => [node.id, node]));
+  const blockers = snapshot.findings
+    .filter(
+      (finding) =>
+        finding.status === "open" && (finding.severity === "P0" || finding.severity === "P1"),
+    )
+    .slice(0, 6);
+  const regressed = snapshot.nodes.filter((node) => node.status === "regressed").slice(0, 4);
+  const blocked = snapshot.nodes.filter((node) => node.status === "blocked").slice(0, 4);
+  return (
+    <section className="toolBlock triageBlock">
+      <div className="panelTitle">
+        <h2>Triage</h2>
+        <span>{blockers.length + regressed.length + blocked.length}</span>
+      </div>
+      {blockers.length === 0 && regressed.length === 0 && blocked.length === 0 ? (
+        <p className="emptyState">No active blockers.</p>
+      ) : null}
+      {blockers.map((finding) => {
+        const node = byNode.get(finding.node_id);
+        return (
+          <button
+            key={finding.id}
+            type="button"
+            className={
+              selected === finding.node_id ? "triageItem selectedTriageItem" : "triageItem"
+            }
+            onClick={() => onSelect(finding.node_id)}
+          >
+            <span className={`priority ${finding.severity}`}>{finding.severity}</span>
+            <strong>{finding.title}</strong>
+            <small>{node ? `${node.id} - ${node.title}` : finding.node_id}</small>
+          </button>
+        );
+      })}
+      {[...regressed, ...blocked].map((node) => (
+        <button
+          key={`${node.status}-${node.id}`}
+          type="button"
+          className={selected === node.id ? "triageItem selectedTriageItem" : "triageItem"}
+          onClick={() => onSelect(node.id)}
+        >
+          <span className={`statusPill ${node.status}`}>{node.status}</span>
+          <strong>{node.id}</strong>
+          <small>{node.blocked_reason ?? node.title}</small>
+        </button>
+      ))}
+    </section>
+  );
+}
+
 function WavePanel({
   snapshot,
   selected,
@@ -736,6 +802,7 @@ function GraphNodes({
             }}
           >
             <rect width={nodeWidth} height={nodeHeight} rx="8" />
+            <rect className={`nodeRail ${node.priority}`} width="6" height={nodeHeight} rx="3" />
             <text className="nodeId" x="14" y="24">
               {node.id}
             </text>
@@ -770,10 +837,12 @@ function NodeDetail({
   node,
   snapshot,
   analytics,
+  onSelect,
 }: {
   node: QdNode;
   snapshot: GraphSnapshot;
   analytics: AnalyticsReport | null;
+  onSelect: (id: string) => void;
 }) {
   const findings = snapshot.findings.filter((finding) => finding.node_id === node.id);
   const runs = snapshot.runs.filter((run) => run.node_id === node.id);
@@ -792,6 +861,7 @@ function NodeDetail({
     .filter((membership) => membership.node_id === node.id)
     .map((membership) => snapshot.waves.find((wave) => wave.id === membership.wave_id))
     .filter((wave): wave is NonNullable<typeof wave> => Boolean(wave));
+  const byNode = new Map(snapshot.nodes.map((candidate) => [candidate.id, candidate]));
 
   return (
     <section className="detailContent">
@@ -846,8 +916,18 @@ function NodeDetail({
       />
       <DetailSection title="Spec" text={node.spec} />
       <DetailSection title="Acceptance" text={node.acceptance} />
-      <DetailList title="Dependencies" items={dependencies.map((edge) => edge.from_node)} />
-      <DetailList title="Unblocks" items={dependents.map((edge) => edge.to_node)} />
+      <DependencyList
+        title="Dependencies"
+        ids={dependencies.map((edge) => edge.from_node)}
+        byNode={byNode}
+        onSelect={onSelect}
+      />
+      <DependencyList
+        title="Unblocks"
+        ids={dependents.map((edge) => edge.to_node)}
+        byNode={byNode}
+        onSelect={onSelect}
+      />
       <Findings findings={findings} />
       <DetailList title="Audit Focus" items={node.audit_focus} />
       <DetailList
@@ -856,6 +936,45 @@ function NodeDetail({
       />
       <DetailList title="Runs" items={runs.map((run) => `${run.kind}: ${run.status}`)} />
       <DetailList title="Notes" items={notes.map((note) => note.text)} />
+    </section>
+  );
+}
+
+function DependencyList({
+  title,
+  ids,
+  byNode,
+  onSelect,
+}: {
+  title: string;
+  ids: string[];
+  byNode: Map<string, QdNode>;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <section className="detailSection">
+      <h3>{title}</h3>
+      {ids.length === 0 ? (
+        <p>None</p>
+      ) : (
+        <div className="dependencyList">
+          {ids.map((id) => {
+            const node = byNode.get(id);
+            return (
+              <button
+                key={id}
+                type="button"
+                className="dependencyItem"
+                onClick={() => onSelect(id)}
+              >
+                <span className={`statusDot ${node?.status ?? "draft"}`} />
+                <strong>{id}</strong>
+                <small>{node?.title ?? "Missing node"}</small>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }

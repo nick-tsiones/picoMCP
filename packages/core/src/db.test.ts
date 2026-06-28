@@ -165,6 +165,11 @@ require_ci_before_merge = true
         formatConfig(defaultConfig).replace('skills_dir = ".qd/skills"', 'skills_dir = ""'),
       ),
     ).toThrow(/skills_dir must not be empty/);
+    expect(() =>
+      parseConfig(
+        formatConfig(defaultConfig).replace('skills_dir = ".qd/skills"', 'skills_dir = "   "'),
+      ),
+    ).toThrow(/skills_dir must not be empty/);
   });
 
   it("parses quoted strings, trimmed arrays, and escaped config values strictly", () => {
@@ -178,10 +183,13 @@ require_ci_before_merge = true
         envTemplate: ".env.example",
         envFile: ".env.local",
       },
-    }).replace(
-      'clean_worktree_except = [".qd/", "roadmap/spec-dag.json"]',
-      'clean_worktree_except = [ ".qd/", "", "roadmap/spec-dag.json" ]',
-    );
+    })
+      .replace("schema_version = 1", "   schema_version = 1   ")
+      .replace('check_command = ""', 'check_command =   ""   ')
+      .replace(
+        'clean_worktree_except = [".qd/", "roadmap/spec-dag.json"]',
+        'clean_worktree_except = [ ".qd/", "", "roadmap/spec-dag.json" ]',
+      );
 
     expect(parseConfig(text)).toMatchObject({
       skillsDir: '.qd/skills "quoted"',

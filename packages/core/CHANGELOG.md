@@ -1,5 +1,15 @@
 # @cat-cave/qdcli-core
 
+## 0.1.14
+
+### Patch Changes
+
+- Polish the installed viewer and strengthen worktree/diff handoff for audit workflows.
+
+  The viewer now has a triage panel for active blockers and regressed/blocked nodes, clickable dependency navigation in the node detail panel, clearer priority rails on graph nodes, and tighter responsive styling for orchestration dashboards. Worktree status now reports dirty state, changed file counts, merge-base, and ahead/behind counts against a selected base. Worktree env injection is idempotent and replaces qd's marked context block instead of appending duplicate variables.
+
+  `qd diff` now supports explicit optional adapters with `--tool sem` and `--tool inspect`, plus `--working` for uncommitted node worktree changes. The default remains plain `git diff`; semantic/review tools must be requested explicitly and fail loudly when their binaries are unavailable.
+
 ## 0.1.13
 
 ### Patch Changes

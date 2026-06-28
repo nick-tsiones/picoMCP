@@ -37,7 +37,7 @@ If neither is set, qd uses the nearest ancestor `.qd/` directory. If no ancestor
 - `qd prompt plan|implement|audit|resolve [node] [--json]`
 - `qd workspace status|ready|graph [--json] [--config <toml>] [--repo <path>]`
 - `qd advance <node> --summary <text> [--merge]`
-- `qd diff <node> [--base main] [--self-only] [--name-only]`
+- `qd diff <node> [--base main] [--self-only] [--working] [--tool git|sem|inspect] [--format markdown|json|plain]`
 
 Config read/write round trip:
 
@@ -212,11 +212,13 @@ Worktree commands are git helpers for orchestrators that use one branch/worktree
 qd worktree create <node> --branch spec/<node>
 qd worktree create <node> --path ../worktrees/<node> --env-template .env.example --env QD_CACHE=/tmp/qd-cache
 qd worktree env <node> --env-template .env.example --env QD_CACHE=/tmp/qd-cache
-qd worktree status <node> --json
+qd worktree status <node> --base main --json
 qd worktree cleanup <node> --merged-only
 ```
 
-`qd worktree create` defaults to `[worktree].base_dir/<node>` from `.qd/config.toml`, records the branch on the node, and refuses duplicate branch/path checkouts. Env injection writes the configured env file inside the worktree and adds qd context variables such as `QD_ROOT`, `QD_NODE_ID`, `QD_BRANCH`, and `QD_WORKTREE`. qd returns the env file path, but it does not store env values in the database or export.
+`qd worktree create` defaults to `[worktree].base_dir/<node>` from `.qd/config.toml`, records the branch on the node, and refuses duplicate branch/path checkouts. `qd worktree status` reports dirty state, changed file count, merge-base, and ahead/behind counts against `--base`.
+
+Env injection writes the configured env file inside the worktree and adds qd context variables such as `QD_ROOT`, `QD_NODE_ID`, `QD_BRANCH`, and `QD_WORKTREE`. qd owns a marked context block and replaces that block on later runs, so repeated `qd worktree env` calls do not duplicate qd variables. qd returns the env file path, but it does not store env values in the database or export.
 
 ## Audit
 
@@ -255,6 +257,18 @@ Manual verification should be declared on the node with `--verify type=manual,va
 `qd advance <node> --summary "..."` is a lifecycle shortcut for orchestrators. It records completion when needed, runs the P0/P1 gate, runs configured `check_command` and `ci_command` when present, and reports the step where it stopped. It does not perform a git or GitHub merge. Pass `--merge` only after the real repository merge has been performed or when recording qd's state transition is intentionally the next step.
 
 `qd diff <node> --self-only --base main` prints a diff from the node branch's merge-base with `main` to the node branch. This is useful when audit subagents need the branch's own change set without unrelated movement from an ahead main branch.
+
+`qd diff <node> --working` finds the node's recorded worktree and prints uncommitted working-tree changes. Add `--staged` for staged-only worktree changes.
+
+By default qd uses `git diff`. For semantic audit handoff, qd can call optional local adapters explicitly:
+
+```sh
+qd diff <node> --self-only --base main --tool sem --format markdown
+qd diff <node> --self-only --base main --tool inspect --format json
+qd prompt audit <node> --diff-tool sem
+```
+
+`sem` is useful for entity-level diffs and changed-function context. `inspect` is useful for review triage when the project has installed and configured it. qd does not install, vendor, or silently fall back for these tools; if `--tool sem` or `--tool inspect` is requested and the binary is missing, qd fails loudly.
 
 `qd export --status ready,claimed,review --milestone alpha --json` prints a filtered canonical export for session resume and status handoff. Filtering preserves only matching nodes and their matching edges, runs, findings, and notes.
 

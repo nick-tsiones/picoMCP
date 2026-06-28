@@ -1442,6 +1442,12 @@ describe("graph lifecycle", () => {
       await expect(
         restoreGraphSnapshot(restoredRoot, {
           ...snapshot,
+          nodes: [...snapshot.nodes, snapshot.nodes[0]!],
+        }),
+      ).rejects.toThrow(/duplicate node id/);
+      await expect(
+        restoreGraphSnapshot(restoredRoot, {
+          ...snapshot,
           edges: [
             {
               from_node: "missing",
@@ -1452,6 +1458,66 @@ describe("graph lifecycle", () => {
           ],
         }),
       ).rejects.toThrow(/missing from node/);
+      await expect(
+        restoreGraphSnapshot(restoredRoot, {
+          ...snapshot,
+          edges: [
+            {
+              from_node: "a",
+              to_node: "missing",
+              type: "requires",
+              created_at: "2026-06-20T00:00:00.000Z",
+            },
+          ],
+        }),
+      ).rejects.toThrow(/missing to node/);
+      await expect(
+        restoreGraphSnapshot(restoredRoot, {
+          ...snapshot,
+          edges: [
+            {
+              from_node: "a",
+              to_node: "a",
+              type: "related",
+              created_at: "2026-06-20T00:00:00.000Z",
+            },
+            {
+              from_node: "a",
+              to_node: "a",
+              type: "related",
+              created_at: "2026-06-20T00:00:00.000Z",
+            },
+          ],
+        }),
+      ).rejects.toThrow(/duplicate edge/);
+      await expect(
+        restoreGraphSnapshot(restoredRoot, {
+          ...snapshot,
+          edges: [
+            {
+              from_node: "a",
+              to_node: "a",
+              type: "requires",
+              created_at: "2026-06-20T00:00:00.000Z",
+            },
+          ],
+        }),
+      ).rejects.toThrow(/requires edge cycle/);
+      await expect(
+        restoreGraphSnapshot(restoredRoot, {
+          ...snapshot,
+          registries: {
+            ...snapshot.registries,
+            milestones: [
+              {
+                name: "bad-rank",
+                rank: 1.5,
+                created_at: "2026-06-20T00:00:00.000Z",
+              },
+            ],
+          },
+        }),
+      ).rejects.toThrow(/missing integer rank/);
       await expect(
         restoreGraphSnapshot(restoredRoot, {
           ...snapshot,
@@ -1477,6 +1543,43 @@ describe("graph lifecycle", () => {
       await expect(
         restoreGraphSnapshot(restoredRoot, {
           ...snapshot,
+          assignments: [
+            {
+              id: "assignment-1",
+              node_id: "a",
+              role: "worker",
+              owner: "external:worker",
+              branch: null,
+              worktree_path: null,
+              scope: null,
+              status: "open",
+              commits_json: "[]",
+              evidence_json: "[]",
+              summary: null,
+              started_at: "2026-06-20T00:00:00.000Z",
+              finished_at: null,
+            },
+            {
+              id: "assignment-1",
+              node_id: "a",
+              role: "auditor",
+              owner: "external:auditor",
+              branch: null,
+              worktree_path: null,
+              scope: null,
+              status: "open",
+              commits_json: "[]",
+              evidence_json: "[]",
+              summary: null,
+              started_at: "2026-06-20T00:00:00.000Z",
+              finished_at: null,
+            },
+          ],
+        }),
+      ).rejects.toThrow(/duplicate assignment id/);
+      await expect(
+        restoreGraphSnapshot(restoredRoot, {
+          ...snapshot,
           waves: [
             {
               id: "wave-1",
@@ -1497,6 +1600,65 @@ describe("graph lifecycle", () => {
           ],
         }),
       ).rejects.toThrow(/wave membership references missing assignment/);
+      await expect(
+        restoreGraphSnapshot(restoredRoot, {
+          ...snapshot,
+          waves: [
+            {
+              id: "wave-1",
+              kind: "implementation",
+              status: "open",
+              summary: "wave",
+              started_at: "2026-06-20T00:00:00.000Z",
+              finished_at: null,
+            },
+            {
+              id: "wave-1",
+              kind: "audit",
+              status: "open",
+              summary: "duplicate wave",
+              started_at: "2026-06-20T00:00:00.000Z",
+              finished_at: null,
+            },
+          ],
+        }),
+      ).rejects.toThrow(/duplicate wave id/);
+      await expect(
+        restoreGraphSnapshot(restoredRoot, {
+          ...snapshot,
+          wave_memberships: [
+            {
+              wave_id: "missing",
+              node_id: "a",
+              assignment_id: null,
+              created_at: "2026-06-20T00:00:00.000Z",
+            },
+          ],
+        }),
+      ).rejects.toThrow(/wave membership references missing wave/);
+      await expect(
+        restoreGraphSnapshot(restoredRoot, {
+          ...snapshot,
+          waves: [
+            {
+              id: "wave-1",
+              kind: "implementation",
+              status: "open",
+              summary: "wave",
+              started_at: "2026-06-20T00:00:00.000Z",
+              finished_at: null,
+            },
+          ],
+          wave_memberships: [
+            {
+              wave_id: "wave-1",
+              node_id: "missing",
+              assignment_id: null,
+              created_at: "2026-06-20T00:00:00.000Z",
+            },
+          ],
+        }),
+      ).rejects.toThrow(/wave membership references missing node/);
       await expect(
         restoreGraphSnapshot(restoredRoot, {
           ...snapshot,
@@ -1529,6 +1691,57 @@ describe("graph lifecycle", () => {
       await expect(
         restoreGraphSnapshot(restoredRoot, {
           ...snapshot,
+          runs: [
+            {
+              id: "run-1",
+              node_id: "a",
+              kind: "check",
+              status: "passed",
+              command: null,
+              provider: null,
+              exit_code: null,
+              git_sha: null,
+              external_id: null,
+              url: null,
+              rationale: null,
+              superseded_by: null,
+              report_path: null,
+              audit_kind: null,
+              worktree_path: null,
+              agent: null,
+              started_at: "2026-06-20T00:00:00.000Z",
+              finished_at: "2026-06-20T00:00:00.000Z",
+              summary: "run",
+              log_path: null,
+            },
+            {
+              id: "run-1",
+              node_id: "a",
+              kind: "ci",
+              status: "passed",
+              command: null,
+              provider: null,
+              exit_code: null,
+              git_sha: null,
+              external_id: null,
+              url: null,
+              rationale: null,
+              superseded_by: null,
+              report_path: null,
+              audit_kind: null,
+              worktree_path: null,
+              agent: null,
+              started_at: "2026-06-20T00:00:00.000Z",
+              finished_at: "2026-06-20T00:00:00.000Z",
+              summary: "duplicate run",
+              log_path: null,
+            },
+          ],
+        }),
+      ).rejects.toThrow(/duplicate run id/);
+      await expect(
+        restoreGraphSnapshot(restoredRoot, {
+          ...snapshot,
           findings: [
             {
               id: "finding-1",
@@ -1548,6 +1761,28 @@ describe("graph lifecycle", () => {
           ],
         }),
       ).rejects.toThrow(/finding references missing run/);
+      await expect(
+        restoreGraphSnapshot(restoredRoot, {
+          ...snapshot,
+          findings: [
+            {
+              id: "finding-1",
+              node_id: "missing",
+              run_id: null,
+              severity: "P2",
+              status: "open",
+              title: "Finding",
+              path: null,
+              line: null,
+              evidence: "evidence",
+              expected: null,
+              suggested_fix: null,
+              created_at: "2026-06-20T00:00:00.000Z",
+              resolved_at: null,
+            },
+          ],
+        }),
+      ).rejects.toThrow(/finding references missing node/);
       await expect(
         restoreGraphSnapshot(restoredRoot, {
           ...snapshot,

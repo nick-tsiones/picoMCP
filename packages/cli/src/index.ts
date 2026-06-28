@@ -1147,11 +1147,14 @@ async function worktreeCommand(
     const worktrees = await gitWorktrees(root);
     const node = nodeId ? await getNode(root, nodeId) : null;
     const config = await readConfig(root);
+    const base = stringOpt(options.base) ?? "main";
     const filtered = node?.branch
       ? worktrees.filter((worktree) => worktree.branch === node.branch)
       : worktrees;
     return output(
-      await Promise.all(filtered.map((worktree) => enrichWorktree(root, worktree, config))),
+      await Promise.all(
+        filtered.map((worktree) => enrichWorktree(root, worktree, config, { base })),
+      ),
       json,
     );
   }
@@ -1268,12 +1271,49 @@ async function enrichWorktree(
   root: string,
   worktree: { path: string; branch: string | null; head: string | null },
   config: QdConfig,
+  options: { base: string },
 ): Promise<Record<string, unknown>> {
   const envPath = path.join(worktree.path, config.worktree.envFile);
+  const status = await captureCommand("git", ["-C", worktree.path, "status", "--porcelain"], root);
+  const base =
+    worktree.branch && status.code === 0
+      ? await worktreeBaseReport(root, worktree.path, options.base, worktree.branch)
+      : null;
   return {
     ...worktree,
     envFile: path.relative(root, envPath),
     envPresent: await pathExists(envPath),
+    dirty: status.code === 0 ? Boolean(status.stdout.trim()) : null,
+    changedFiles:
+      status.code === 0
+        ? status.stdout
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter(Boolean).length
+        : null,
+    base,
+  };
+}
+
+async function worktreeBaseReport(
+  root: string,
+  worktreePath: string,
+  baseRef: string,
+  branch: string,
+): Promise<Record<string, unknown> | null> {
+  const mergeBase = await captureCommand("git", ["merge-base", baseRef, branch], root);
+  if (mergeBase.code !== 0) return null;
+  const aheadBehind = await captureCommand(
+    "git",
+    ["-C", worktreePath, "rev-list", "--left-right", "--count", `${baseRef}...${branch}`],
+    root,
+  );
+  const [behindText, aheadText] = aheadBehind.stdout.trim().split(/\s+/);
+  return {
+    ref: baseRef,
+    mergeBase: mergeBase.stdout.trim(),
+    ahead: Number.parseInt(aheadText ?? "0", 10),
+    behind: Number.parseInt(behindText ?? "0", 10),
   };
 }
 
@@ -1316,9 +1356,10 @@ async function writeWorktreeEnv(
       throw error;
     });
   }
+  const startMarker = "# qd worktree context begin";
+  const endMarker = "# qd worktree context end";
   const injected = [
-    "",
-    "# qd worktree context",
+    startMarker,
     `QD_ROOT=${quoteEnvValue(root)}`,
     `QD_NODE_ID=${quoteEnvValue(nodeId)}`,
     `QD_BRANCH=${quoteEnvValue(branch)}`,
@@ -1326,10 +1367,22 @@ async function writeWorktreeEnv(
     ...stringListOpt(options.env)
       .map(parseEnvAssignment)
       .map(([key, value]) => `${key}=${quoteEnvValue(value)}`),
-    "",
+    endMarker,
   ].join("\n");
-  await appendFile(envPath, injected, "utf8");
+  const current = await readFile(envPath, "utf8");
+  const pattern = new RegExp(
+    `\\n?${escapeRegExp(startMarker)}[\\s\\S]*?${escapeRegExp(endMarker)}\\n?`,
+    "m",
+  );
+  const next = current.match(pattern)
+    ? current.replace(pattern, `\n${injected}\n`)
+    : `${current.replace(/\s*$/, "")}\n\n${injected}\n`;
+  await writeFile(envPath, next, "utf8");
   return path.relative(root, envPath);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function parseEnvAssignment(value: string): [string, string] {
@@ -1796,29 +1849,84 @@ async function diffCommand(
   const node = await getNode(root, requiredArg(nodeId, "node id"));
   if (!node.branch) throw new Error(`Node ${node.id} has no branch. Claim with --branch first.`);
   const base = stringOpt(options.base) ?? "main";
+  const tool = diffToolFromOptions(options);
+  const format = diffFormatFromOptions(options, tool);
+  if (options["name-only"] && tool !== "git") {
+    throw new Error("--name-only is only supported with --tool git");
+  }
+  if (options.working && options["self-only"]) {
+    throw new Error("--working and --self-only are separate diff modes; choose one");
+  }
+  if (options.working && tool === "inspect") {
+    throw new Error(
+      "--tool inspect only supports committed ref/range review; use --tool git or --tool sem for --working",
+    );
+  }
+
   const args = ["diff"];
   if (options["name-only"]) args.push("--name-only");
   let mergeBase: string | null = null;
-  if (options["self-only"]) {
+  let cwd = root;
+  let command = "git";
+  let commandArgs: string[] = [];
+  let range: string | null = null;
+
+  if (options.working) {
+    const worktree = await nodeWorktree(root, node.branch);
+    cwd = worktree.path;
+    if (tool === "git") {
+      commandArgs = ["diff"];
+      if (options["name-only"]) commandArgs.push("--name-only");
+      if (options.staged) commandArgs.push("--staged");
+    } else {
+      command = "sem";
+      commandArgs = ["diff", "--format", format];
+      if (options.staged) commandArgs.push("--staged");
+    }
+  } else if (options["self-only"]) {
     const result = await captureCommand("git", ["merge-base", base, node.branch], root);
     if (result.code !== 0) {
       throw new Error(`git merge-base failed for ${base} and ${node.branch}: ${result.stderr}`);
     }
     mergeBase = result.stdout.trim();
-    args.push(`${mergeBase}..${node.branch}`);
+    range = `${mergeBase}..${node.branch}`;
   } else {
-    args.push(`${base}...${node.branch}`);
+    range = `${base}...${node.branch}`;
   }
-  const result = await captureCommand("git", args, root);
-  if (result.code !== 0) throw new Error(`git diff failed: ${result.stderr}`);
+
+  if (!options.working) {
+    if (!range) throw new Error("Internal error: diff range was not resolved");
+    if (tool === "git") {
+      commandArgs = [...args, range];
+    } else if (tool === "sem") {
+      command = "sem";
+      const [from, to] = range.includes("...")
+        ? [base, node.branch]
+        : [mergeBase ?? base, node.branch];
+      commandArgs = ["diff", "--from", from, "--to", to, "--format", format];
+    } else {
+      command = "inspect";
+      const inspectRange = range.includes("...") ? `${base}..${node.branch}` : range;
+      commandArgs = ["diff", inspectRange, "--format", format];
+    }
+  }
+
+  const result = await captureDiffCommand(command, commandArgs, cwd, tool);
+  if (result.code !== 0) throw new Error(`${tool} diff failed: ${result.stderr}`);
   if (json) {
     output(
       {
         nodeId: node.id,
         base,
         branch: node.branch,
+        tool,
+        format,
+        working: Boolean(options.working),
+        staged: Boolean(options.staged),
         selfOnly: Boolean(options["self-only"]),
         mergeBase,
+        cwd,
+        command: [command, ...commandArgs],
         diff: result.stdout,
       },
       true,
@@ -1826,6 +1934,69 @@ async function diffCommand(
     return;
   }
   process.stdout.write(result.stdout);
+}
+
+type DiffTool = "git" | "sem" | "inspect";
+type DiffFormat = "patch" | "plain" | "json" | "markdown";
+
+function diffToolFromOptions(options: Record<string, string | string[] | boolean>): DiffTool {
+  if (options.semantic) return "sem";
+  if (options.inspect) return "inspect";
+  return strictEnumOpt(options.tool, isDiffTool, "--tool", "git");
+}
+
+function diffFormatFromOptions(
+  options: Record<string, string | string[] | boolean>,
+  tool: DiffTool,
+): DiffFormat {
+  const fallback = tool === "git" ? "patch" : "markdown";
+  const format = strictEnumOpt(options.format, isDiffFormat, "--format", fallback);
+  if (tool === "git" && format !== "patch") {
+    throw new Error("--format is only supported with --tool sem or --tool inspect");
+  }
+  return format;
+}
+
+function isDiffTool(value: string): value is DiffTool {
+  return value === "git" || value === "sem" || value === "inspect";
+}
+
+function isDiffFormat(value: string): value is DiffFormat {
+  return value === "patch" || value === "plain" || value === "json" || value === "markdown";
+}
+
+async function nodeWorktree(
+  root: string,
+  branch: string,
+): Promise<{ path: string; branch: string | null; head: string | null }> {
+  const worktree = (await gitWorktrees(root)).find((entry) => entry.branch === branch);
+  if (!worktree) throw new Error(`No worktree found for branch ${branch}`);
+  return worktree;
+}
+
+async function captureDiffCommand(
+  command: string,
+  args: string[],
+  cwd: string,
+  tool: DiffTool,
+): Promise<{ code: number; stdout: string; stderr: string }> {
+  try {
+    return await captureCommand(command, args, cwd);
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      if (tool === "sem") {
+        throw new Error(
+          "sem is not installed. Install @ataraxy-labs/sem or the sem binary, then rerun qd diff --tool sem.",
+        );
+      }
+      if (tool === "inspect") {
+        throw new Error(
+          "inspect is not installed. Install inspect-cli, then rerun qd diff --tool inspect.",
+        );
+      }
+    }
+    throw error;
+  }
 }
 
 async function planCommand(
@@ -2733,8 +2904,16 @@ async function promptCommand(
     stringOpt(options["include-project-rules"]) ?? stringOpt(options["include-rules-file"]);
   const projectRules = rulesPath ? await readTextFile(root, rulesPath) : undefined;
   const auditBase = stringOpt(options.base) ?? "main";
+  const auditDiffTool = strictEnumOpt(
+    options["diff-tool"] ?? (options.semantic ? "sem" : undefined),
+    isDiffTool,
+    "--diff-tool",
+    "git",
+  );
   const auditDiffCommand =
-    kind === "audit" && id ? `qd diff ${id} --self-only --base ${auditBase}` : undefined;
+    kind === "audit" && id
+      ? `qd diff ${id} --self-only --base ${auditBase}${auditDiffTool === "git" ? "" : ` --tool ${auditDiffTool} --format markdown`}`
+      : undefined;
   const prompt = promptText(kind, node, { projectRules, auditDiffCommand });
   if (json) {
     output(
@@ -4688,7 +4867,7 @@ Core:
   qd velocity [--window 7]
   qd critical-path [--milestone <name>]
   qd eta [--window 7] [--milestone <name>]
-  qd prompt plan|implement|audit|resolve [node] [--include-project-rules <path>] [--base main] [--json]
+  qd prompt plan|implement|audit|resolve [node] [--include-project-rules <path>] [--base main] [--diff-tool git|sem|inspect] [--json]
   qd config show
   qd config get ci-command
   qd config set check-command --value "<fast project check command>"
@@ -4721,7 +4900,7 @@ Graph:
   qd claim [node] --agent <name> [--branch <branch>]
   qd complete <node> --summary <text>
   qd advance <node> --summary <text> [--merge]
-  qd diff <node> [--base main] [--self-only] [--name-only]
+  qd diff <node> [--base main] [--self-only] [--working] [--tool git|sem|inspect] [--format markdown|json|plain]
   qd worktree create <node> [--branch spec/<node>] [--path <path>] [--env-template .env.example] [--env KEY=value]
   qd worktree env <node> [--env-template .env.example] [--env KEY=value]
 
@@ -4771,8 +4950,9 @@ function commandHelp(group: string, action?: string): string {
     wave: "qd wave start|add-node|add-assignment|complete|status\nRecords wave-level orchestration state.",
     policy:
       "qd policy evaluate <node> --phase ci|merge [--json]\nReports configured lifecycle policy violations as stable codes.",
+    diff: "qd diff <node> [--base main] [--self-only] [--working] [--tool git|sem|inspect] [--format markdown|json|plain]\nPrints committed or worktree-local node diffs. git is built in; sem and inspect are explicit optional adapters and fail loudly when unavailable.",
     worktree:
-      "qd worktree create|env|status|list|cleanup <node>\nCreates git worktrees, records node branches, and writes worktree-local env files without storing env values in qd.",
+      "qd worktree create|env|status|list|cleanup <node> [--base main]\nCreates git worktrees, records node branches, reports dirty/ahead/behind state, and writes worktree-local env files without storing env values in qd.",
   };
   return entries[key] ?? entries[group] ?? helpText();
 }
@@ -4784,7 +4964,9 @@ function topicHelp(topic: string): string {
     audits:
       "qd audits: use qd audit start, qd audit pass/fail --from-report, and qd audit dispose/cancel/supersede with rationale for stale runs.",
     worktrees:
-      "qd worktrees: use one branch/worktree per active node or assignment. qd refuses duplicate branch/path checkouts, can inject worktree-local env files, and never stores env values in DAG state.",
+      "qd worktrees: use one branch/worktree per active node or assignment. qd refuses duplicate branch/path checkouts, reports dirty/ahead/behind state, can inject worktree-local env files, and never stores env values in DAG state.",
+    diffs:
+      "qd diffs: default to git patch output. Use --self-only for merge-base-to-branch audit context, --working for uncommitted worktree changes, --tool sem for entity-level diffs, and --tool inspect for explicit review triage when inspect-cli is installed.",
     assignments:
       "qd assignments: record role, owner, branch, worktree, scope, commits, and evidence. Owner strings are opaque and agent-agnostic.",
     waves:

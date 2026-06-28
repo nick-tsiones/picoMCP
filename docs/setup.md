@@ -157,7 +157,16 @@ qd config set worktree-env-template --value ".env.example"
 qd config set worktree-env-file --value ".env"
 ```
 
-Then the orchestrator can run `qd worktree create <node> --branch spec/<node>` and get a checked-out branch plus a worktree-local env file. qd writes qd context variables into that env file, but it never stores env contents in the DAG database or committed export.
+Then the orchestrator can run `qd worktree create <node> --branch spec/<node>` and get a checked-out branch plus a worktree-local env file. qd writes qd context variables into that env file, but it never stores env contents in the DAG database or committed export. Use `qd worktree status <node> --base main --json` to inspect dirty state, changed file count, merge-base, and ahead/behind state before dispatching auditors.
+
+Semantic diff/review tools are optional project tooling. If the project wants entity-level audit context, install the tool in that project environment and call it explicitly through qd:
+
+```sh
+qd diff <node> --tool sem --format markdown --self-only --base main
+qd diff <node> --tool inspect --format json --self-only --base main
+```
+
+qd does not silently fall back from `sem` or `inspect` to plain git output. Missing adapter binaries are setup errors, not degraded success.
 
 After qd state changes that should be shared, export and commit the portable DAG snapshot:
 

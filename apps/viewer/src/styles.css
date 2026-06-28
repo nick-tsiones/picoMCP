@@ -319,6 +319,58 @@ button {
   width: 100%;
 }
 
+.triageBlock {
+  background: #fbfcfd;
+}
+
+.triageItem {
+  background: #ffffff;
+  border: 1px solid #d7e0e4;
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  margin-bottom: 8px;
+  padding: 9px;
+  text-align: left;
+  width: 100%;
+}
+
+.triageItem:hover {
+  border-color: #a66d43;
+}
+
+.selectedTriageItem {
+  border-color: #a66d43;
+  box-shadow: inset 3px 0 0 #a66d43;
+}
+
+.triageItem strong,
+.triageItem small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.triageItem small {
+  color: #65747c;
+}
+
+.statusPill {
+  border-radius: 999px;
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 750;
+  padding: 2px 7px;
+  width: fit-content;
+}
+
+.statusPill.blocked,
+.statusPill.regressed {
+  background: #fff1df;
+  color: #895716;
+}
+
 .waveItem {
   background: #ffffff;
   border: 1px solid #d7e0e4;
@@ -513,6 +565,26 @@ button {
     stroke-width 160ms ease;
 }
 
+.graphNode .nodeRail {
+  stroke: none;
+}
+
+.graphNode .nodeRail.P0 {
+  fill: #c74438;
+}
+
+.graphNode .nodeRail.P1 {
+  fill: #d98416;
+}
+
+.graphNode .nodeRail.P2 {
+  fill: #2c8558;
+}
+
+.graphNode .nodeRail.P3 {
+  fill: #6476bd;
+}
+
 .graphNode:hover rect,
 .graphNode:focus rect {
   stroke: #2a829d;
@@ -668,6 +740,71 @@ button {
   padding-left: 18px;
 }
 
+.dependencyList {
+  display: grid;
+  gap: 6px;
+}
+
+.dependencyItem {
+  align-items: center;
+  background: #f8fafb;
+  border: 1px solid #d7e0e4;
+  border-radius: 7px;
+  color: #172026;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  min-height: 34px;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.dependencyItem:hover {
+  border-color: #317f9d;
+}
+
+.dependencyItem strong,
+.dependencyItem small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dependencyItem small {
+  color: #65747c;
+}
+
+.statusDot {
+  background: #9aa8af;
+  border-radius: 999px;
+  display: inline-block;
+  height: 9px;
+  width: 9px;
+}
+
+.statusDot.ready,
+.statusDot.mergeable {
+  background: #2c8558;
+}
+
+.statusDot.done {
+  background: #6f7d84;
+}
+
+.statusDot.blocked,
+.statusDot.regressed {
+  background: #c46c26;
+}
+
+.statusDot.review,
+.statusDot.working,
+.statusDot.claimed,
+.statusDot.fixing,
+.statusDot.ci {
+  background: #7659b6;
+}
+
 @media (max-width: 1180px) {
   .workspace {
     grid-template-columns: 280px minmax(0, 1fr);
@@ -712,5 +849,9 @@ button {
 
   .dagCanvas {
     min-height: 62vh;
+  }
+
+  .sidebar {
+    max-height: none;
   }
 }

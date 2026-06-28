@@ -226,9 +226,10 @@ If the project uses worktrees, use qd's helper to make the branch/path/env conve
 ```sh
 qd worktree create <node> --branch spec/<node>
 qd worktree env <node> --env-template .env.example --env QD_CACHE=/tmp/qd-cache
+qd worktree status <node> --base main --json
 ```
 
-Do not put secrets in qd notes, node specs, findings, or exports. Worktree env injection writes files in the worktree and reports the file path; qd does not store env values in the DAG.
+Do not put secrets in qd notes, node specs, findings, or exports. Worktree env injection writes files in the worktree and reports the file path; qd does not store env values in the DAG. Re-running `qd worktree env` replaces qd's marked context block instead of appending duplicate variables.
 
 ## Run Checks And Merge
 
@@ -299,7 +300,16 @@ These show ready work, completed points, remaining points, velocity, critical pa
 
 `qd view` serves the embedded read-only dashboard from the installed CLI. Use it for human inspection, but keep all state changes in CLI commands so the DAG remains auditable.
 
-When audit context depends on branch diffs, prefer `qd diff <node> --self-only --base main` over ad hoc `main..branch` prompts. It uses the node's recorded branch and merge-base to avoid including unrelated movement from main.
+When audit context depends on branch diffs, prefer `qd diff <node> --self-only --base main` over ad hoc `main..branch` prompts. It uses the node's recorded branch and merge-base to avoid including unrelated movement from main. For uncommitted worktree changes, use `qd diff <node> --working`.
+
+If the project has installed semantic diff tooling, use it explicitly in the audit handoff:
+
+```sh
+qd diff <node> --self-only --base main --tool sem --format markdown
+qd prompt audit <node> --diff-tool sem
+```
+
+`sem` is a good fit for entity-level changed-function context. `inspect` can be useful for review triage when installed and configured, especially on large changes. Treat both as optional adapters. qd should fail loudly if a requested adapter is missing; do not silently replace semantic audit context with a plain diff and pretend the requested review happened.
 
 ## First Trial Goal
 
