@@ -39,12 +39,13 @@ qd stores its working cache in `.qd/qd.db`, but that binary DB is local state. T
 ```sh
 qd export --out roadmap/spec-dag.json
 qd import --from roadmap/spec-dag.json
+qd sync --from roadmap/spec-dag.json
 ```
 
 Use this export/import path when moving between machines, worktrees, or remote execution hosts. Do not ask the user to commit `.qd/qd.db`. After qd mutations that should be shared, export and commit the JSON snapshot:
 
 ```sh
-qd export --out roadmap/spec-dag.json
+qd export --deterministic --out roadmap/spec-dag.json
 git add roadmap/spec-dag.json
 git commit -m "Update qd DAG"
 ```
@@ -71,12 +72,13 @@ Run:
 
 ```sh
 qd doctor --json
+qd doctor --strict --json
 qd status --json
 qd ready --json
 qd snapshot --json
 ```
 
-If `qd doctor` reports config or graph errors, fix those before delegating work.
+If `qd doctor` reports config or graph errors, fix those before delegating work. Use normal `qd doctor` for advisory setup checks during migration. Use `qd doctor --strict` in dogfood repositories that want warnings such as unregistered metadata or incomplete blocker records to fail.
 
 You may run qd from a subdirectory. qd resolves `--root`, then `QD_ROOT`, then the nearest ancestor `.qd/` directory.
 
@@ -111,7 +113,7 @@ qd import --from roadmap/spec-dag.json --schema-mapping roadmap/qd-import-map.js
 qd validate
 ```
 
-Read `docs/import.md` in the qdcli repository before migrating an existing DAG. Treat import errors as graph problems to fix before orchestration. Review dry-run defaults, warnings, and dropped fields; do not assume a field was intentionally ignored unless the mapping makes that explicit.
+Read `docs/import.md` in the qdcli repository before migrating an existing DAG. Treat import errors as graph problems to fix before orchestration. Review dry-run defaults, warnings, and dropped fields; do not assume a field was intentionally ignored unless the mapping makes that explicit. Import and bulk minting are transactional; if qd rejects the plan, fix the plan and retry rather than cleaning up partial state.
 
 Use registered metadata when the project has real scheduling lanes, product areas, or strict milestone ordering:
 
@@ -151,6 +153,33 @@ Delegate the implementation prompt and project context to a subagent. When the s
 qd complete <node> --summary "<what changed>"
 ```
 
+When delegation needs durable ownership records, use assignments. Assignment owners are opaque strings; examples may be `human:trevor`, `external:worker-1`, `github-actions:<run-id>`, or any other harness-owned identifier. qd records ownership and evidence, but it does not launch or control that worker.
+
+```sh
+qd assignment add <node> --role worker --owner external:worker-1 --branch worker/<node> --worktree /scratch/worktrees/<repo>-worker-<node>
+qd assignment complete <assignment-id> --summary "<what changed>" --commit <sha> --evidence <path-or-url>
+qd assignment list --status open --json
+```
+
+Use waves when the orchestrator is dispatching batches and needs an audit cadence that survives chat context:
+
+```sh
+qd wave start --kind implementation --summary "<wave goal>"
+qd wave add-node <wave-id> <node>
+qd wave add-assignment <wave-id> <assignment-id>
+qd wave complete <wave-id> --summary "<what landed>"
+qd wave status --json
+```
+
+If a node is blocked by a manual, external, or policy condition, record that explicitly instead of leaving it in the ready queue:
+
+```sh
+qd node edit <node> --blocked-by manual --blocked-reason "<specific blocker>" --blocked-owner "<owner>"
+qd node edit <node> --clear-blocker --status ready
+```
+
+Blocked nodes are not ready work, even when dependencies are complete. Do not use blocker metadata for dependency truth; use `requires` edges for that.
+
 Start audit:
 
 ```sh
@@ -181,7 +210,7 @@ qd gate <node>
 qd promote-findings <node>
 ```
 
-`qd promote-findings` returns the finding id and new node id for every promoted P2/P3, and the new node records where it came from. Preserve that trail when explaining why follow-up nodes exist.
+`qd promote-findings` returns the finding id and new node id for every promoted P2/P3, and the new node records where it came from. Use `qd finding promote <finding>` for a single finding, or `qd finding dispose <finding> --disposition accepted-risk --rationale "<why>"` when the project intentionally accepts the risk. Preserve that trail when explaining why follow-up nodes exist.
 
 ## Run Checks And Merge
 

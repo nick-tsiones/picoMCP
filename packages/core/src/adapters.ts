@@ -32,20 +32,20 @@ export function adaptImportSource(adapter: ImportAdapter, content: string): Adap
 
 export function adaptRoadmapHtml(content: string): AdapterOutput {
   const headings = [...content.matchAll(/<h3\b[^>]*>(?<title>[\s\S]*?)<\/h3>/gi)];
-  const nodes: AdapterNode[] = [];
-  const edges: AdapterEdge[] = [];
+  const planned: Array<{ node: AdapterNode; deps: string[] }> = [];
   const seen = new Set<string>();
+  const idByRef = new Map<string, string>();
   for (const [index, heading] of headings.entries()) {
     const title = textFromHtml(heading.groups?.title ?? "");
     if (!title) continue;
     const headingStart = heading.index ?? 0;
-    const start = nearestContainerStart(content, headingStart);
     const next = headings[index + 1]?.index ?? content.length;
-    const segment = content.slice(start, next);
-    const id = uniqueId(slugify(title), seen);
+    const segment = cardSegment(content, headingStart, next);
+    const explicitId = firstAttribute(segment, "data-qd-id") ?? firstAttribute(segment, "id");
+    const id = uniqueId(slugify(explicitId || title), seen);
     const phase = textFromHtml(firstClassText(segment, "ph") ?? "");
     const deps = dependencyRefs(segment);
-    nodes.push({
+    const node = {
       id,
       title,
       status: statusFromHtmlSegment(segment),
@@ -54,9 +54,20 @@ export function adaptRoadmapHtml(content: string): AdapterOutput {
       milestone: phase || undefined,
       group_name: phase || undefined,
       status_reason: deps.length > 0 ? `Imported dependencies: ${deps.join(", ")}` : undefined,
-    });
-    for (const dep of deps) edges.push({ from_node: slugify(dep), to_node: id, type: "requires" });
+    };
+    planned.push({ node, deps });
+    idByRef.set(slugify(title), id);
+    idByRef.set(id, id);
+    if (explicitId) idByRef.set(slugify(explicitId), id);
   }
+  const nodes = planned.map((item) => item.node);
+  const edges = planned.flatMap(({ node, deps }) =>
+    deps.map((dep) => ({
+      from_node: idByRef.get(slugify(dep)) ?? slugify(dep),
+      to_node: node.id,
+      type: "requires" as EdgeType,
+    })),
+  );
   assertEdgesReferenceKnownNodes(nodes, edges);
   return { nodes, edges };
 }
@@ -108,18 +119,44 @@ export function adaptMarkdownChecklist(content: string): AdapterOutput {
   return { nodes, edges };
 }
 
-function nearestContainerStart(content: string, headingStart: number): number {
-  const starts = ["<section", "<article", "<div"]
-    .map((tag) => content.lastIndexOf(tag, headingStart))
-    .filter((index) => index >= 0);
-  return starts.length > 0 ? Math.max(...starts) : headingStart;
-}
-
 function htmlSpec(segment: string, title: string): string {
   const goal = textFromHtml(firstClassText(segment, "goal") ?? "");
   if (goal) return goal;
   const paragraph = textFromHtml(firstTagText(segment, "p") ?? "");
   return paragraph || title;
+}
+
+function cardSegment(content: string, headingStart: number, nextHeadingStart: number): string {
+  const container = nearestOpenContainer(content, headingStart);
+  if (container) {
+    const closeStart = content.indexOf(`</${container.tag}>`, headingStart);
+    if (closeStart >= 0 && closeStart < nextHeadingStart) {
+      return content.slice(container.start, closeStart + container.tag.length + 3);
+    }
+  }
+  const nextContainer = ["<section", "<article", "<div"]
+    .map((tag) => content.indexOf(tag, headingStart + 1))
+    .filter((index) => index >= 0)
+    .sort((a, b) => a - b)[0];
+  const end =
+    nextContainer === undefined ? nextHeadingStart : Math.min(nextHeadingStart, nextContainer);
+  return content.slice(headingStart, end);
+}
+
+function nearestOpenContainer(
+  content: string,
+  headingStart: number,
+): { tag: string; start: number } | null {
+  const starts = ["section", "article", "div"]
+    .map((tag) => ({ tag, start: content.lastIndexOf(`<${tag}`, headingStart) }))
+    .filter((item) => item.start >= 0)
+    .sort((a, b) => b.start - a.start);
+  const candidate = starts[0];
+  if (!candidate) return null;
+  const priorClose = content.lastIndexOf(`</${candidate.tag}>`, headingStart);
+  if (priorClose > candidate.start) return null;
+  const openEnd = content.indexOf(">", candidate.start);
+  return openEnd >= 0 && openEnd < headingStart ? candidate : null;
 }
 
 function htmlAcceptance(segment: string): string {
@@ -130,17 +167,31 @@ function htmlAcceptance(segment: string): string {
 }
 
 function statusFromHtmlSegment(segment: string): NodeStatus {
-  const classText = [...segment.matchAll(/class=["'](?<class>[^"']+)["']/gi)]
+  const classText = [
+    ...segment.matchAll(/class=["'](?<class>[^"']+)["']/gi),
+    ...segment.matchAll(/data-status=["'](?<class>[^"']+)["']/gi),
+    ...segment.matchAll(/aria-label=["'](?<class>[^"']+)["']/gi),
+  ]
     .map((item) => item.groups?.class ?? "")
     .join(" ");
-  if (/\b(done|complete|completed)\b/i.test(classText)) return "done";
-  if (/\b(active|doing|in-progress)\b/i.test(classText)) return "working";
-  if (/\b(blocked)\b/i.test(classText)) return "blocked";
+  const text = textFromHtml(segment);
+  const combined = `${classText} ${text}`;
+  if (/\b(done|complete|completed|landed|merged)\b/i.test(combined)) return "done";
+  if (/\b(active|doing|in[-_\s]?progress|working)\b/i.test(combined)) return "working";
+  if (/\b(blocked|external blocker|manual blocker)\b/i.test(combined)) return "blocked";
+  if (/\b(cancelled|canceled|not planned)\b/i.test(combined)) return "cancelled";
   return "ready";
 }
 
 function dependencyRefs(segment: string): string[] {
-  return classTexts(segment, "dep").flatMap((text) => splitRefs(textFromHtml(text)));
+  const classRefs = classTexts(segment, "dep").flatMap((text) => splitRefs(textFromHtml(text)));
+  const dataRefs = [
+    ...segment.matchAll(/data-(?:depends-on|deps)=["'](?<deps>[^"']+)["']/gi),
+  ].flatMap((match) => splitRefs(match.groups?.deps ?? ""));
+  const textRefs = [...textFromHtml(segment).matchAll(/depends?\s+on\s*:\s*([^.;]+)/gi)].flatMap(
+    (match) => splitRefs(match[1] ?? ""),
+  );
+  return [...new Set([...classRefs, ...dataRefs, ...textRefs])];
 }
 
 function firstClassText(segment: string, className: string): string | undefined {
@@ -160,6 +211,10 @@ function classTexts(segment: string, className: string): string[] {
 function firstTagText(segment: string, tag: string): string | undefined {
   return new RegExp(`<${tag}\\b[^>]*>(?<text>[\\s\\S]*?)<\\/${tag}>`, "i").exec(segment)?.groups
     ?.text;
+}
+
+function firstAttribute(segment: string, name: string): string | undefined {
+  return new RegExp(`\\b${name}=["'](?<value>[^"']+)["']`, "i").exec(segment)?.groups?.value;
 }
 
 function assertEdgesReferenceKnownNodes(nodes: AdapterNode[], edges: AdapterEdge[]): void {

@@ -188,7 +188,7 @@ export function calculateEta(
 
 function calculateReady(snapshot: GraphSnapshot): QdNode[] {
   return snapshot.nodes.filter((node) => {
-    if (!["ready", "blocked"].includes(node.status)) return false;
+    if (!["ready", "regressed"].includes(node.status)) return false;
     return !snapshot.edges.some((edge) => blocksNode(snapshot, edge, node));
   });
 }

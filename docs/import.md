@@ -9,7 +9,9 @@ The import command is strict by design:
 - Unknown source statuses fail unless `statusMap` maps them.
 - Malformed arrays fail instead of dropping invalid entries.
 - Duplicate node ids, missing edge endpoints, and `requires` cycles fail before qd writes anything.
-- Real imports require an empty qd node table. Register groups, projects, and milestones first, but import before creating qd nodes.
+- Real imports are transactional. A failed import leaves the existing graph unchanged.
+- Plain imports require an empty qd node table. Use `--merge` only when you intentionally want sync/replace semantics.
+- Bulk import auto-registers referenced groups, projects, and milestones so validation stays consistent after migration.
 - `--dry-run` uses the same mapping path and reports defaults, unmapped top-level fields, warnings, planned nodes, and planned edges.
 
 ## Recommended Migration Flow
@@ -18,7 +20,9 @@ The import command is strict by design:
 
    If the existing roadmap has mixed shapes, write a small project-local preprocessor first. qd should receive predictable JSON, not a pile of special cases.
 
-2. Register strict project metadata.
+2. Decide strict project metadata.
+
+   For a mature project, register known groups, projects, and milestones before import so typos fail during the dry run. If the source DAG already carries the authoritative metadata, qd will auto-register referenced values during the successful import.
 
    ```sh
    qd milestone register --name baseline --rank 10
@@ -63,7 +67,7 @@ qd import --from docs/ROADMAP.html --adapter roadmap-html --dry-run --json
 qd import --from roadmap.md --adapter markdown-checklist --dry-run --json
 ```
 
-`roadmap-html` looks for `<h3>` card titles, `.goal` text, `<li>` acceptance items, `.dep` dependency labels, and `.ph` phase/milestone labels. It maps card classes such as `done`, `active`, `ready`, and `blocked` to qd statuses.
+`roadmap-html` treats each `<h3>` card title as one node and keeps extraction scoped to that card span so large roadmap containers do not become oversized specs. It looks for `.goal` text, the first paragraph fallback, `<li>` acceptance items, `.dep`, `data-deps`, `data-depends-on`, or `depends on:` dependency labels, and `.ph` phase/milestone labels. It maps card classes, `data-status`, aria labels, and nearby text such as `done`, `active`, `in-progress`, `blocked`, and `cancelled` to qd statuses.
 
 `markdown-checklist` reads `- [ ]` and `- [x]` items as nodes. Indented `depends on:` bullets become `requires` edges, and indented `acceptance:` bullets become acceptance criteria.
 
@@ -103,6 +107,9 @@ interface ImportMapping {
   auditFocus?: string; // default: "auditFocus"; string or string[]
   context?: string; // default: "context"
   statusReason?: string; // default: "statusReason"
+  blockedBy?: string; // default: "blocked_by"; manual|external|policy
+  blockedReason?: string; // default: "blocked_reason"
+  blockedOwner?: string; // default: "blocked_owner"
   statusMap?: Record<string, NodeStatus>;
   nodeEdges?: {
     path: string;

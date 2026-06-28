@@ -76,6 +76,16 @@ describe("analytics", () => {
     expect(stats.openP0P1Findings).toBe(1);
     expect(stats.remainingPoints).toBe(6);
   });
+
+  it("counts regressed nodes as ready candidates but excludes blocked nodes", () => {
+    const snapshot = fixture();
+    snapshot.nodes.find((item) => item.id === "a")!.status = "regressed";
+    snapshot.nodes.find((item) => item.id === "c")!.status = "blocked";
+
+    const stats = calculateStats(snapshot);
+
+    expect(stats.ready).toBe(1);
+  });
 });
 
 function fixture(): GraphSnapshot {
@@ -110,6 +120,9 @@ function fixture(): GraphSnapshot {
     findings: [],
     runs: [],
     node_notes: [],
+    assignments: [],
+    waves: [],
+    wave_memberships: [],
   };
 }
 
@@ -141,6 +154,9 @@ function node(
     status_reason: null,
     check_command: null,
     ci_command: null,
+    blocked_by: null,
+    blocked_reason: null,
+    blocked_owner: null,
     context: null,
     created_at: "2026-06-20T00:00:00.000Z",
     updated_at: "2026-06-20T00:00:00.000Z",

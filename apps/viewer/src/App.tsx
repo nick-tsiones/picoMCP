@@ -19,6 +19,9 @@ const emptySnapshot: GraphSnapshot = {
   findings: [],
   runs: [],
   node_notes: [],
+  assignments: [],
+  waves: [],
+  wave_memberships: [],
 };
 
 const statuses: NodeStatus[] = [
@@ -825,7 +828,7 @@ function compareNodes(a: QdNode, b: QdNode): number {
 
 function readyNodes(snapshot: GraphSnapshot): QdNode[] {
   return snapshot.nodes.filter((node) => {
-    if (!["ready", "blocked"].includes(node.status)) return false;
+    if (!["ready", "regressed"].includes(node.status)) return false;
     return !snapshot.edges.some((edge) => {
       if (edge.type !== "requires" || edge.to_node !== node.id) return false;
       return snapshot.nodes.find((candidate) => candidate.id === edge.from_node)?.status !== "done";

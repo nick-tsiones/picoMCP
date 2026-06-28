@@ -7,33 +7,47 @@ import type { AddressInfo } from "node:net";
 import { fileURLToPath } from "node:url";
 import {
   addEdge,
+  addAssignment,
   addFinding,
   addNode,
   addNodeNote,
+  addNodesBulk,
+  addWaveAssignment,
+  addWaveNode,
   adaptImportSource,
   analyticsReport,
   cancelNode,
   ciFail,
   claimNode,
   completeNode,
+  completeAssignment,
+  completeWave,
   criticalPathReport,
+  deterministicGraphSnapshot,
+  disposeFinding,
   etaReport,
+  finishRun,
   getProjectPaths,
   gateNode,
   getNode,
+  getRun,
   graphSnapshot,
   initProject,
   listNodeNotes,
   listEdges,
+  listAssignments,
   listFindings,
   listNodes,
   listRuns,
   listRegistry,
+  listWaveMemberships,
+  listWaves,
   latestRun,
   markMerged,
   promoteFindings,
   readConfig,
   recordCiResult,
+  replaceGraphSnapshot,
   readyNodes,
   registerGroup,
   registerMilestone,
@@ -45,7 +59,9 @@ import {
   restoreGraphSnapshot,
   setupProject,
   startRun,
+  startWave,
   stats,
+  unblockNode,
   updateNode,
   validateGraph,
   velocityReport,
@@ -55,13 +71,16 @@ import {
   writeConfig,
   type QdConfig,
   type AddNodeInput,
+  type BlockerType,
   type EdgeType,
   type FindingStatus,
   type ImportAdapter,
   type GraphSnapshot,
+  type NoteKind,
   type NodeKind,
   type NodeStatus,
   type Priority,
+  type QdRun,
   type Risk,
   type VerificationEntry,
 } from "@cat-cave/qdcli-core";
@@ -83,7 +102,14 @@ async function main(): Promise<void> {
   }
 
   if (!group || group === "help" || group === "--help" || group === "-h") {
-    console.log(helpText());
+    const topic = group === "help" ? action : undefined;
+    if (topic) console.log(topicHelp(topic));
+    else console.log(helpText());
+    return;
+  }
+
+  if (args.options.help || args.options.h) {
+    console.log(commandHelp(group, action));
     return;
   }
 
@@ -116,11 +142,14 @@ async function main(): Promise<void> {
         json,
       );
     case "doctor":
-      return doctor(root, json);
+      return doctor(root, args.options, json);
     case "status":
       return output(await stats(root), json);
     case "ready":
-      return output(await readyNodes(root), json);
+      return output(
+        formatRows(filterNodes(await readyNodes(root), args.options), args.options),
+        json,
+      );
     case "graph":
       return graph(root, args.options, json);
     case "validate":
@@ -129,6 +158,8 @@ async function main(): Promise<void> {
       return configCommand(root, action, extra, args.command.slice(3), args.options, json);
     case "import":
       return importCommand(root, args.options, json);
+    case "sync":
+      return syncCommand(root, args.options, json);
     case "export":
       return exportCommand(root, args.options, json);
     case "group":
@@ -141,17 +172,36 @@ async function main(): Promise<void> {
       return nodesCommand(root, action, args.options, json);
     case "note":
       return noteCommand(root, action, extra, args.options, json);
-    case "edge":
-      return edgeCommand(root, action, args.command.slice(2), args.options, json);
-    case "claim":
+    case "assignment":
+      return assignmentCommand(root, action, extra, args.options, json);
+    case "wave":
+      return waveCommand(root, action, extra, args.command.slice(2), args.options, json);
+    case "worktree":
+      return worktreeCommand(root, action, extra, args.options, json);
+    case "run":
+      return runCommand(root, action, extra, args.options, json);
+    case "state":
+      return stateCommand(root, action, args.options, json);
+    case "env":
+      return envCommand(action, args.options, json);
+    case "schema":
+      return schemaCommand(action, extra, json);
+    case "unblock":
       return output(
-        await claimNode(root, {
-          id: action,
-          agent: required(args.options.agent, "--agent"),
-          branch: stringOpt(args.options.branch),
+        await unblockNode(root, requiredArg(action, "node id"), {
+          fromRunId: required(args.options["from-run"], "--from-run"),
+          summary: required(args.options.summary, "--summary"),
         }),
         json,
       );
+    case "merge-ready":
+      return readinessCommand(root, action, "merge", json);
+    case "completion-ready":
+      return readinessCommand(root, action, "completion", json);
+    case "edge":
+      return edgeCommand(root, action, args.command.slice(2), args.options, json);
+    case "claim":
+      return claimCommand(root, action, args.options, json);
     case "start":
       return output(await startRun(root, requiredArg(action, "node id"), "implement"), json);
     case "complete":
@@ -185,23 +235,11 @@ async function main(): Promise<void> {
     case "verification":
       return verificationCommand(root, action, extra, args.options, json);
     case "merge":
-      return output(
-        await markMerged(
-          root,
-          requiredArg(action, "node id"),
-          strictEnumOpt(args.options.strategy, isMergeStrategy, "--strategy", "squash"),
-          {
-            commitSha:
-              stringOpt(args.options["use-existing-commit"]) ??
-              stringOpt(args.options["already-merged-at"]),
-          },
-        ),
-        json,
-      );
+      return mergeCommand(root, action, args.options, json);
     case "plan":
       return planCommand(root, action, args.options, json);
     case "milestone":
-      return milestoneCommand(root, action, args.options, json);
+      return milestoneCommand(root, action, extra, args.options, json);
     case "velocity":
       return output(await velocityReport(root, numberOpt(args.options.window) ?? 7), json);
     case "critical-path":
@@ -241,8 +279,13 @@ async function main(): Promise<void> {
   }
 }
 
-async function doctor(root: string, json: boolean): Promise<void> {
-  const validationResult = await validateGraph(root);
+async function doctor(
+  root: string,
+  options: Record<string, string | string[] | boolean>,
+  json: boolean,
+): Promise<void> {
+  const strict = Boolean(options.strict);
+  const validationResult = await validateGraph(root, { strict });
   const config = await readConfig(root);
   const configErrors: string[] = [];
   const configWarnings: string[] = [];
@@ -262,6 +305,7 @@ async function doctor(root: string, json: boolean): Promise<void> {
   }
   const result = {
     ok: validationResult.ok && configErrors.length === 0,
+    strict,
     checks: {
       initialized: true,
       schema: true,
@@ -356,12 +400,27 @@ async function exportCommand(
     statuses: parseStatusList(options.status),
     milestone: stringOpt(options.milestone),
   });
-  const outPath = stringOpt(options.out);
-  if (!outPath) return output(snapshot, true);
+  if (options.fields) {
+    if (options.out) throw new Error("qd export --fields cannot be combined with --out");
+    return output(formatRows(snapshot.nodes, options), json);
+  }
+  const exported = options.deterministic ? deterministicGraphSnapshot(snapshot) : snapshot;
+  const config = await readConfig(root);
+  const outPath = stringOpt(options.out) ?? config.exportDefaultOut;
+  if (!outPath) return output(exported, true);
 
   const resolvedOut = path.resolve(root, outPath);
   await mkdir(path.dirname(resolvedOut), { recursive: true });
-  await writeFile(resolvedOut, `${JSON.stringify(snapshot, null, 2)}\n`, "utf8");
+  await writeFile(resolvedOut, `${JSON.stringify(exported, null, 2)}\n`, "utf8");
+  if (!options["no-hooks"]) {
+    const hook = config.exportCanonicalizeCommand || config.hooks.postExport;
+    if (hook.trim()) {
+      await runPolicyHook(root, hook, {
+        out: resolvedOut,
+        root,
+      });
+    }
+  }
   return output(
     {
       ok: true,
@@ -411,33 +470,16 @@ async function nodeCommand(
   }
   if (action === "note") return nodeNoteCommand(root, id, options, json);
   if (action === "show") return nodeShowCommand(root, id, options, json);
-  if (action === "list" || !action) return output(await listNodes(root), json);
+  if (action === "list" || !action)
+    return output(formatRows(filterNodes(await listNodes(root), options), options), json);
   if (action === "cancel") return output(await cancelNode(root, requiredArg(id, "node id")), json);
   if (action === "edit") {
     return output(
-      await updateNode(root, requiredArg(id, "node id"), {
-        title: stringOpt(options.title),
-        kind: strictEnumOpt(options.kind, isNodeKind, "--kind"),
-        milestone: stringOpt(options.milestone),
-        group_name: stringOpt(options.group),
-        projects: options.project ? stringListOpt(options.project) : undefined,
-        status: strictEnumOpt(options.status, isNodeStatus, "--status"),
-        priority: strictEnumOpt(options.priority, isPriority, "--priority"),
-        estimatePoints: numberOpt(options.estimate),
-        risk: strictEnumOpt(options.risk, isRisk, "--risk"),
-        spec: stringOpt(options.spec),
-        acceptance: stringOpt(options.acceptance),
-        validation: stringOpt(options.validation),
-        verification: options.verify
-          ? stringListOpt(options.verify).map(parseVerification)
-          : undefined,
-        audit_focus: options["audit-focus"] ? stringListOpt(options["audit-focus"]) : undefined,
-        context: stringOpt(options.context),
-        status_reason: stringOpt(options["status-reason"]),
-        check_command: stringOpt(options["check-command"]),
-        ci_command: stringOpt(options["ci-command"]),
-        branch: stringOpt(options.branch),
-      }),
+      await updateNode(
+        root,
+        requiredArg(id, "node id"),
+        await nodeUpdateFromOptions(root, options),
+      ),
       json,
     );
   }
@@ -458,34 +500,28 @@ async function nodesCommand(
       ? (asRecord(raw, "--from-json").nodes as unknown[])
       : undefined;
   if (!rawNodes) throw new Error("--from-json must contain an array or an object with nodes[]");
-  const createdNodes = [];
-  for (const [index, rawNode] of rawNodes.entries()) {
-    createdNodes.push(await addNode(root, normalizeNodeInput(rawNode, `nodes[${index}]`)));
-  }
+  const nodes = rawNodes.map((rawNode, index) => normalizeNodeInput(rawNode, `nodes[${index}]`));
 
   const source = Array.isArray(raw) ? null : asRecord(raw, "--from-json");
   if (source?.edges !== undefined && !Array.isArray(source.edges)) {
     throw new Error("--from-json edges must be an array when provided");
   }
   const rawEdges = source?.edges ?? [];
-  const createdEdges = [];
+  const edges = [];
   for (const [index, rawEdge] of rawEdges.entries()) {
     const edge = asRecord(rawEdge, `edges[${index}]`);
-    createdEdges.push(
-      await addEdge(
-        root,
-        requiredNodeStringField(edge, "from", `edges[${index}]`, "from_node"),
-        requiredNodeStringField(edge, "to", `edges[${index}]`, "to_node"),
-        strictOptionalEnum(
-          optionalStringField(edge, "type", `edges[${index}]`),
-          isEdgeType,
-          `edges[${index}].type`,
-          "requires",
-        ),
+    edges.push({
+      from: requiredNodeStringField(edge, "from", `edges[${index}]`, "from_node"),
+      to: requiredNodeStringField(edge, "to", `edges[${index}]`, "to_node"),
+      type: strictOptionalEnum(
+        optionalStringField(edge, "type", `edges[${index}]`),
+        isEdgeType,
+        `edges[${index}].type`,
+        "requires",
       ),
-    );
+    });
   }
-  return output({ nodes: createdNodes, edges: createdEdges }, json);
+  return output(await addNodesBulk(root, { nodes, edges }), json);
 }
 
 async function nodeShowCommand(
@@ -496,6 +532,29 @@ async function nodeShowCommand(
 ): Promise<void> {
   const nodeId = requiredArg(id, "node id");
   const node = await getNode(root, nodeId);
+  if (options.summary || options["no-big-text"]) {
+    return output(
+      {
+        id: node.id,
+        title: node.title,
+        kind: node.kind,
+        milestone: node.milestone,
+        status: node.status,
+        priority: node.priority,
+        risk: node.risk,
+        owner: node.owner,
+        branch: node.branch,
+        group_name: node.group_name,
+        projects: node.projects,
+        blocked_by: node.blocked_by,
+        blocked_reason: node.blocked_reason,
+        blocked_owner: node.blocked_owner,
+        check_command: node.check_command,
+        ci_command: node.ci_command,
+      },
+      json,
+    );
+  }
   if (!options.full && !options.include) return output(node, json);
   const include = new Set(
     (stringOpt(options.include) ?? "findings,notes,runs,audits")
@@ -529,9 +588,67 @@ async function noteCommand(
 ): Promise<void> {
   const id = requiredArg(nodeId, "node id");
   if (action === "add")
-    return output(await addNodeNote(root, id, required(options.text, "--text")), json);
-  if (action === "list" || !action) return output(await listNodeNotes(root, id), json);
+    return output(
+      await addNodeNote(root, id, required(options.text, "--text"), {
+        kind: strictEnumOpt(options.kind, isNoteKind, "--kind", "note"),
+        evidence: stringOpt(options.evidence),
+      }),
+      json,
+    );
+  if (action === "list" || !action)
+    return output(await listNodeNotes(root, id, { kinds: parseNoteKindList(options.kind) }), json);
   throw new Error(`Unknown note action: ${action}`);
+}
+
+async function claimCommand(
+  root: string,
+  nodeId: string | undefined,
+  options: Record<string, string | string[] | boolean>,
+  json: boolean,
+): Promise<void> {
+  const config = await readConfig(root);
+  if (!options["no-hooks"] && config.hooks.preClaim.trim()) {
+    await runPolicyHook(root, config.hooks.preClaim, { root, node: nodeId ?? "" });
+  }
+  const node = await claimNode(root, {
+    id: nodeId,
+    agent: required(options.agent, "--agent"),
+    branch: stringOpt(options.branch),
+  });
+  if (!options["no-hooks"] && config.hooks.postClaim.trim()) {
+    await runPolicyHook(root, config.hooks.postClaim, {
+      root,
+      node: node.id,
+      branch: node.branch ?? "",
+    });
+  }
+  return output(node, json);
+}
+
+async function mergeCommand(
+  root: string,
+  nodeId: string | undefined,
+  options: Record<string, string | string[] | boolean>,
+  json: boolean,
+): Promise<void> {
+  const id = requiredArg(nodeId, "node id");
+  const config = await readConfig(root);
+  if (!options["no-hooks"] && config.hooks.preMerge.trim()) {
+    await runPolicyHook(root, config.hooks.preMerge, { root, node: id });
+  }
+  const node = await markMerged(
+    root,
+    id,
+    strictEnumOpt(options.strategy, isMergeStrategy, "--strategy", "squash"),
+    {
+      commitSha:
+        stringOpt(options["use-existing-commit"]) ?? stringOpt(options["already-merged-at"]),
+    },
+  );
+  if (!options["no-hooks"] && config.hooks.postMerge.trim()) {
+    await runPolicyHook(root, config.hooks.postMerge, { root, node: id });
+  }
+  return output(node, json);
 }
 
 async function edgeCommand(
@@ -598,6 +715,65 @@ async function findingCommand(
   }
   if (action === "resolve")
     return output(await resolveFinding(root, requiredArg(nodeOrFinding, "finding id")), json);
+  if (action === "dispose") {
+    const disposition = required(options.disposition, "--disposition");
+    const status =
+      disposition === "accepted-risk" || disposition === "dismissed"
+        ? "dismissed"
+        : disposition === "resolved"
+          ? "resolved"
+          : disposition === "follow-up-node" || disposition === "promoted"
+            ? "promoted"
+            : null;
+    if (!status)
+      throw new Error(
+        "--disposition must be resolved, follow-up-node, promoted, dismissed, or accepted-risk",
+      );
+    return output(
+      await disposeFinding(root, requiredArg(nodeOrFinding, "finding id"), {
+        status,
+        rationale: required(options.rationale, "--rationale"),
+      }),
+      json,
+    );
+  }
+  if (action === "promote") {
+    const findingId = requiredArg(nodeOrFinding, "finding id");
+    const finding = (await listFindings(root)).find((item) => item.id === findingId);
+    if (!finding) throw new Error(`Finding not found: ${findingId}`);
+    if (finding.severity === "P0" || finding.severity === "P1") {
+      throw new Error("P0/P1 findings must be resolved, not promoted into non-blocking follow-up");
+    }
+    const targetNode = stringOpt(options.node);
+    if (targetNode) {
+      const node = await getNode(root, targetNode);
+      const disposed = await disposeFinding(root, findingId, {
+        status: "promoted",
+        rationale: required(options.rationale, "--rationale"),
+      });
+      await addNodeNote(root, node.id, `Promoted finding ${findingId}: ${disposed.title}`, {
+        kind: "audit-disposition",
+        evidence: `finding:${findingId}`,
+      });
+      return output({ finding: disposed, node }, json);
+    }
+    const node = await addNode(root, {
+      title: stringOpt(options.title) ?? finding.title,
+      kind: "audit-fix",
+      priority: finding.severity,
+      risk: finding.severity === "P2" ? "medium" : "low",
+      spec: [finding.evidence, finding.suggested_fix].filter(Boolean).join("\n\n"),
+      acceptance: stringOpt(options.acceptance) ?? finding.expected ?? "Finding is addressed.",
+      verification: stringListOpt(options.verification).map(parseVerification),
+      context: finding.path ? `${finding.path}${finding.line ? `:${finding.line}` : ""}` : null,
+      statusReason: `Promoted from finding ${finding.id} on node ${finding.node_id}.`,
+    });
+    const disposed = await disposeFinding(root, findingId, {
+      status: "promoted",
+      rationale: stringOpt(options.rationale) ?? `Promoted to ${node.id}`,
+    });
+    return output({ finding: disposed, node }, json);
+  }
   if (action === "list" || !action) {
     if (options.open && options.status) throw new Error("Use either --open or --status, not both");
     return output(
@@ -620,19 +796,48 @@ async function auditCommand(
   json: boolean,
 ): Promise<void> {
   if (action === "start") {
-    return output(await startRun(root, requiredArg(nodeId, "node id"), "audit"), json);
+    return output(
+      await startRun(root, requiredArg(nodeId, "node id"), "audit", {
+        auditKind: stringOpt(options.kind) ?? "general",
+        agent: stringOpt(options.auditor) ?? stringOpt(options.agent),
+        summary: stringOpt(options.summary),
+      }),
+      json,
+    );
   }
-  if (action && action !== "pass") {
+  if (action === "validate") {
+    return output(
+      validateAuditReport(await readJson(root, nodeId ?? required(options.file, "--file"))),
+      json,
+    );
+  }
+  if (action && !["pass", "fail", "dispose", "cancel", "supersede", "list"].includes(action)) {
     return output(await startRun(root, requiredArg(action, "node id"), "audit"), json);
+  }
+  if (action === "list") {
+    return output(
+      await listRuns(root, {
+        nodeId: stringOpt(options.node),
+        status: stringOpt(options.status),
+        kind: "audit",
+      }),
+      json,
+    );
   }
   if (action === "pass") {
     const id = requiredArg(nodeId, "node id");
+    const auditRun = await selectedAuditRun(root, id, options);
     const imported = await importFindingsFromReport(
       root,
       required(options["from-report"], "--from-report"),
       id,
       { allowEmpty: true },
     );
+    await finishRun(root, auditRun.id, {
+      status: "passed",
+      summary: `Audit passed from ${required(options["from-report"], "--from-report")}`,
+      reportPath: required(options["from-report"], "--from-report"),
+    });
     const gate = await gateNode(root, id);
     if (!gate.ok) {
       output(
@@ -662,13 +867,349 @@ async function auditCommand(
       json,
     );
   }
+  if (action === "fail") {
+    const id = requiredArg(nodeId, "node id");
+    const auditRun = await selectedAuditRun(root, id, options);
+    const imported = await importFindingsFromReport(
+      root,
+      required(options["from-report"], "--from-report"),
+      id,
+      { allowEmpty: true },
+    );
+    const finished = await finishRun(root, auditRun.id, {
+      status: "failed",
+      summary:
+        stringOpt(options.summary) ??
+        `Audit failed from ${required(options["from-report"], "--from-report")}`,
+      reportPath: required(options["from-report"], "--from-report"),
+    });
+    return output({ ok: false, nodeId: id, run: finished, imported }, json);
+  }
+  if (action === "dispose" || action === "cancel" || action === "supersede") {
+    requiredArg(nodeId, "node id");
+    const runId = required(options["run-id"], "--run-id");
+    const status =
+      action === "dispose" ? "cancelled" : action === "cancel" ? "cancelled" : "superseded";
+    return output(
+      await finishRun(root, runId, {
+        status,
+        rationale: required(options.rationale, "--rationale"),
+        summary: `${action}: ${required(options.rationale, "--rationale")}`,
+      }),
+      json,
+    );
+  }
   throw new Error(`Unknown audit action: ${action}`);
 }
 
+async function selectedAuditRun(
+  root: string,
+  nodeId: string,
+  options: Record<string, string | string[] | boolean>,
+): Promise<QdRun> {
+  const runId = stringOpt(options["run-id"]);
+  if (runId) {
+    const runRow = await getRun(root, runId);
+    if (runRow.node_id !== nodeId)
+      throw new Error(`Audit run ${runId} does not belong to ${nodeId}`);
+    if (runRow.kind !== "audit") throw new Error(`Run ${runId} is not an audit run`);
+    return runRow;
+  }
+  const running = await listRuns(root, { nodeId, kind: "audit", status: "running" });
+  if (running.length === 0) {
+    throw new Error(`No running audit found for ${nodeId}; pass --run-id for a specific audit`);
+  }
+  if (running.length > 1) {
+    throw new Error(`Multiple running audits found for ${nodeId}; pass --run-id`);
+  }
+  const runRow = running[0];
+  if (!runRow) throw new Error(`No running audit found for ${nodeId}`);
+  return runRow;
+}
+
 async function gate(root: string, nodeId: string, json: boolean): Promise<void> {
+  const config = await readConfig(root);
+  if (config.hooks.preGate.trim())
+    await runPolicyHook(root, config.hooks.preGate, { root, node: nodeId });
   const result = await gateNode(root, nodeId);
-  output(result, json);
+  const node = await getNode(root, nodeId);
+  const latestCheck = await latestRun(root, nodeId, "check");
+  const latestCi = await latestRun(root, nodeId, "ci");
+  const openFollowups = await listFindings(root, {
+    nodeId,
+    status: "open",
+    severities: ["P2", "P3"],
+  });
+  const enriched = {
+    ...result,
+    checks: {
+      latestCheck: latestCheck ?? null,
+      latestCi: latestCi ?? null,
+      undisposedP2P3: openFollowups,
+    },
+    next: nextStepForNode(node, result, latestCheck ?? null, latestCi ?? null),
+  };
+  output(enriched, json);
   if (!result.ok) process.exitCode = 1;
+}
+
+async function runCommand(
+  root: string,
+  action: string | undefined,
+  id: string | undefined,
+  options: Record<string, string | string[] | boolean>,
+  json: boolean,
+): Promise<void> {
+  if (action === "list" || !action) {
+    return output(
+      await listRuns(root, {
+        nodeId: stringOpt(options.node),
+        status: stringOpt(options.status),
+        kind: strictEnumOpt(options.kind, isRunKind, "--kind"),
+      }),
+      json,
+    );
+  }
+  if (action === "show") return output(await getRun(root, requiredArg(id, "run id")), json);
+  if (action === "cancel") {
+    return output(
+      await finishRun(root, requiredArg(id, "run id"), {
+        status: "cancelled",
+        rationale: required(options.rationale, "--rationale"),
+        summary: required(options.rationale, "--rationale"),
+      }),
+      json,
+    );
+  }
+  if (action === "supersede") {
+    return output(
+      await finishRun(root, requiredArg(id, "run id"), {
+        status: "superseded",
+        supersededBy: required(options.by, "--by"),
+        rationale: required(options.rationale, "--rationale"),
+        summary: required(options.rationale, "--rationale"),
+      }),
+      json,
+    );
+  }
+  throw new Error(`Unknown run action: ${action}`);
+}
+
+async function assignmentCommand(
+  root: string,
+  action: string | undefined,
+  id: string | undefined,
+  options: Record<string, string | string[] | boolean>,
+  json: boolean,
+): Promise<void> {
+  if (action === "add") {
+    if (options["from-json"]) {
+      const raw = asRecord(
+        await readJson(root, required(options["from-json"], "--from-json")),
+        "--from-json",
+      );
+      return output(
+        await addAssignment(root, {
+          nodeId: requiredNodeStringField(raw, "nodeId", "--from-json", "node_id"),
+          role: strictEnum(
+            requiredNodeStringField(raw, "role", "--from-json"),
+            isAssignmentRole,
+            "role",
+          ),
+          owner: requiredNodeStringField(raw, "owner", "--from-json"),
+          branch: optionalStringField(raw, "branch", "--from-json"),
+          worktreePath:
+            optionalStringField(raw, "worktreePath", "--from-json") ??
+            optionalStringField(raw, "worktree_path", "--from-json"),
+          scope: optionalStringField(raw, "scope", "--from-json"),
+        }),
+        json,
+      );
+    }
+    return output(
+      await addAssignment(root, {
+        nodeId: requiredArg(id, "node id"),
+        role: strictEnum(required(options.role, "--role"), isAssignmentRole, "--role"),
+        owner: required(options.owner, "--owner"),
+        branch: stringOpt(options.branch),
+        worktreePath: stringOpt(options.worktree),
+        scope: stringOpt(options.scope),
+      }),
+      json,
+    );
+  }
+  if (action === "validate") {
+    return output(
+      validateAssignmentReport(await readJson(root, id ?? required(options.file, "--file"))),
+      json,
+    );
+  }
+  if (action === "complete" || action === "fail" || action === "cancel") {
+    if (options["from-json"]) {
+      const raw = asRecord(
+        await readJson(root, required(options["from-json"], "--from-json")),
+        "--from-json",
+      );
+      return output(
+        await completeAssignment(root, requiredArg(id, "assignment id"), {
+          status: action === "complete" ? "complete" : action === "fail" ? "failed" : "cancelled",
+          summary: requiredNodeStringField(raw, "summary", "--from-json"),
+          commits: strictStringArrayField(raw, "commits", "--from-json"),
+          evidence: strictStringArrayField(raw, "evidence", "--from-json"),
+        }),
+        json,
+      );
+    }
+    return output(
+      await completeAssignment(root, requiredArg(id, "assignment id"), {
+        status: action === "complete" ? "complete" : action === "fail" ? "failed" : "cancelled",
+        summary: required(options.summary, "--summary"),
+        commits: stringListOpt(options.commit),
+        evidence: stringListOpt(options.evidence),
+      }),
+      json,
+    );
+  }
+  if (action === "list" || !action) {
+    return output(
+      await listAssignments(root, {
+        nodeId: stringOpt(options.node),
+        status: strictEnumOpt(options.status, isAssignmentStatus, "--status"),
+      }),
+      json,
+    );
+  }
+  throw new Error(`Unknown assignment action: ${action}`);
+}
+
+async function waveCommand(
+  root: string,
+  action: string | undefined,
+  id: string | undefined,
+  positionals: string[],
+  options: Record<string, string | string[] | boolean>,
+  json: boolean,
+): Promise<void> {
+  if (action === "start") {
+    return output(
+      await startWave(root, {
+        kind: strictEnumOpt(options.kind, isWaveKind, "--kind", "implementation"),
+        summary: required(options.summary, "--summary"),
+      }),
+      json,
+    );
+  }
+  if (action === "add-node") {
+    await addWaveNode(root, requiredArg(id, "wave id"), requiredArg(positionals[0], "node id"));
+    return output({ ok: true }, json);
+  }
+  if (action === "add-assignment") {
+    await addWaveAssignment(
+      root,
+      requiredArg(id, "wave id"),
+      requiredArg(positionals[0], "assignment id"),
+    );
+    return output({ ok: true }, json);
+  }
+  if (action === "complete" || action === "cancel") {
+    return output(
+      await completeWave(root, requiredArg(id, "wave id"), {
+        status: action === "cancel" ? "cancelled" : "complete",
+        summary: required(options.summary, "--summary"),
+      }),
+      json,
+    );
+  }
+  if (action === "status" || action === "list" || !action) {
+    return output(
+      { waves: await listWaves(root), memberships: await listWaveMemberships(root) },
+      json,
+    );
+  }
+  throw new Error(`Unknown wave action: ${action}`);
+}
+
+async function worktreeCommand(
+  root: string,
+  action: string | undefined,
+  nodeId: string | undefined,
+  options: Record<string, string | string[] | boolean>,
+  json: boolean,
+): Promise<void> {
+  if (action === "list" || action === "status" || !action) {
+    const worktrees = await gitWorktrees(root);
+    const node = nodeId ? await getNode(root, nodeId) : null;
+    const filtered = node?.branch
+      ? worktrees.filter((worktree) => worktree.branch === node.branch)
+      : worktrees;
+    return output(filtered, json);
+  }
+  if (action === "create") {
+    const node = await getNode(root, requiredArg(nodeId, "node id"));
+    const kind = stringOpt(options.kind) ?? "spec";
+    const branch = stringOpt(options.branch) ?? `${kind}/${node.id}`;
+    const worktreePath = path.resolve(root, required(options.path, "--path"));
+    const existing = await gitWorktrees(root);
+    if (existing.some((worktree) => worktree.branch === branch)) {
+      throw new Error(`Branch is already checked out in a worktree: ${branch}`);
+    }
+    if (existing.some((worktree) => path.resolve(worktree.path) === worktreePath)) {
+      throw new Error(`Worktree path is already in use: ${worktreePath}`);
+    }
+    const branchExists = await captureCommand("git", ["rev-parse", "--verify", branch], root);
+    const args =
+      branchExists.code === 0
+        ? ["worktree", "add", worktreePath, branch]
+        : ["worktree", "add", "-b", branch, worktreePath, "HEAD"];
+    const result = await captureCommand("git", args, root);
+    if (result.code !== 0) throw new Error(`git worktree add failed: ${result.stderr}`);
+    const updated = await updateNode(root, node.id, { branch });
+    return output({ ok: true, node: updated, branch, worktree: worktreePath }, json);
+  }
+  if (action === "cleanup") {
+    const node = await getNode(root, requiredArg(nodeId, "node id"));
+    if (!node.branch) throw new Error(`Node ${node.id} has no branch`);
+    const worktree = (await gitWorktrees(root)).find((entry) => entry.branch === node.branch);
+    if (!worktree) throw new Error(`No worktree found for branch ${node.branch}`);
+    const dirty = await captureCommand("git", ["-C", worktree.path, "status", "--porcelain"], root);
+    if (dirty.code !== 0) throw new Error(`git status failed: ${dirty.stderr}`);
+    if (dirty.stdout.trim()) throw new Error(`Refusing to remove dirty worktree: ${worktree.path}`);
+    if (options["merged-only"]) {
+      const merged = await captureCommand(
+        "git",
+        ["branch", "--merged", "main", "--format", "%(refname:short)"],
+        root,
+      );
+      if (!merged.stdout.split(/\r?\n/).includes(node.branch)) {
+        throw new Error(`Refusing cleanup because branch is not merged into main: ${node.branch}`);
+      }
+    }
+    const removed = await captureCommand("git", ["worktree", "remove", worktree.path], root);
+    if (removed.code !== 0) throw new Error(`git worktree remove failed: ${removed.stderr}`);
+    return output({ ok: true, removed: worktree.path, branch: node.branch }, json);
+  }
+  throw new Error(`Unknown worktree action: ${action}`);
+}
+
+async function gitWorktrees(
+  root: string,
+): Promise<Array<{ path: string; branch: string | null; head: string | null }>> {
+  const result = await captureCommand("git", ["worktree", "list", "--porcelain"], root);
+  if (result.code !== 0) throw new Error(`git worktree list failed: ${result.stderr}`);
+  const entries: Array<{ path: string; branch: string | null; head: string | null }> = [];
+  let current: { path: string; branch: string | null; head: string | null } | null = null;
+  for (const line of result.stdout.split(/\r?\n/)) {
+    if (!line.trim()) {
+      if (current) entries.push(current);
+      current = null;
+      continue;
+    }
+    if (line.startsWith("worktree ")) current = { path: line.slice(9), branch: null, head: null };
+    else if (line.startsWith("HEAD ") && current) current.head = line.slice(5);
+    else if (line.startsWith("branch ") && current) current.branch = line.slice(18);
+  }
+  if (current) entries.push(current);
+  return entries;
 }
 
 async function ciCommand(
@@ -898,6 +1439,44 @@ async function verificationCommand(
   json: boolean,
 ): Promise<void> {
   if (action !== "sign-off" && action !== "signoff") {
+    if (action === "list" || !action) {
+      const node = await getNode(root, requiredArg(nodeId, "node id"));
+      return output({ nodeId: node.id, verification: node.verification }, json);
+    }
+    if (action === "validate") {
+      return output(
+        validateVerificationReport(
+          await readJson(root, nodeId ?? required(options.file, "--file")),
+        ),
+        json,
+      );
+    }
+    if (action === "record") {
+      const report = asRecord(
+        await readJson(root, required(options["from-json"], "--from-json")),
+        "--from-json",
+      );
+      const id = requiredNodeStringField(report, "nodeId", "--from-json", "node_id");
+      const status = requiredNodeStringField(report, "status", "--from-json");
+      if (status !== "passed" && status !== "failed") {
+        throw new Error("--from-json.status must be passed or failed");
+      }
+      const runRow = await startRun(root, id, "verification", {
+        command: optionalStringField(report, "command", "--from-json"),
+        provider: optionalStringField(report, "provider", "--from-json") ?? "external",
+        summary: optionalStringField(report, "summary", "--from-json"),
+        reportPath: optionalStringField(report, "evidence", "--from-json"),
+      });
+      const finished = await finishRun(root, runRow.id, {
+        status,
+        summary: optionalStringField(report, "summary", "--from-json") ?? `verification ${status}`,
+        exitCode: optionalNumberField(report, "exitCode", "--from-json"),
+      });
+      return output(finished, json);
+    }
+    if (action === "run") {
+      return verificationRunCommand(root, requiredArg(nodeId, "node id"), options, json);
+    }
     throw new Error(`Unknown verification action: ${action}`);
   }
   const id = requiredArg(nodeId, "node id");
@@ -921,6 +1500,49 @@ async function verificationCommand(
     { ok: true, nodeId: id, type, note, evidence: evidence ?? null, noteRecord: saved },
     json,
   );
+}
+
+async function verificationRunCommand(
+  root: string,
+  nodeId: string,
+  options: Record<string, string | string[] | boolean>,
+  json: boolean,
+): Promise<void> {
+  const node = await getNode(root, nodeId);
+  const only = stringOpt(options.only);
+  const commands = node.verification
+    .filter((entry) => entry.type === "command")
+    .filter((entry) => !only || entry.value === only)
+    .map((entry) => entry.value);
+  if (commands.length === 0) {
+    throw new Error(
+      only
+        ? `No matching command verification: ${only}`
+        : "Node has no command verification entries",
+    );
+  }
+  const results = [];
+  for (const command of commands) {
+    const runRow = await startRun(root, nodeId, "verification", {
+      command,
+      provider: "local",
+      summary: `verification command started: ${command}`,
+    });
+    const paths = getProjectPaths(root);
+    await mkdir(paths.logsDir, { recursive: true });
+    const logPath = path.join(paths.logsDir, `verification-${nodeId}-${runRow.id}.log`);
+    const execution = await runShellCommand(command, root, logPath);
+    const status =
+      execution.exitCode === 0 ? "passed" : execution.timedOut ? "timed_out" : "failed";
+    const finished = await finishRun(root, runRow.id, {
+      status,
+      summary: `verification command ${status}: ${command}`,
+      exitCode: execution.exitCode,
+    });
+    results.push({ ...finished, log_path: logPath });
+  }
+  output({ ok: results.every((runRow) => runRow.status === "passed"), runs: results }, json);
+  if (results.some((runRow) => runRow.status !== "passed")) process.exitCode = 1;
 }
 
 async function advanceCommand(
@@ -1051,6 +1673,7 @@ async function planCommand(
 async function milestoneCommand(
   root: string,
   action: string | undefined,
+  name: string | undefined,
   options: Record<string, string | string[] | boolean>,
   json: boolean,
 ): Promise<void> {
@@ -1066,13 +1689,55 @@ async function milestoneCommand(
   }
   if (action === "list") return output(await listRegistry(root, "milestones"), json);
   if (action === "status" || !action) {
+    const milestone = name ?? stringOpt(options.milestone) ?? null;
     return output(
       await analyticsReport(root, {
-        milestone: stringOpt(options.milestone) ?? null,
+        milestone,
         windowDays: numberOpt(options.window) ?? 7,
       }),
       json,
     );
+  }
+  if (action === "remaining") {
+    const milestone = requiredArg(name, "milestone name");
+    const graph = await graphSnapshot(root);
+    return output(
+      formatRows(
+        graph.nodes.filter((node) => node.milestone === milestone && node.status !== "done"),
+        options,
+      ),
+      json,
+    );
+  }
+  if (action === "blockers") {
+    const milestone = requiredArg(name, "milestone name");
+    const graph = await graphSnapshot(root);
+    const nodeIds = new Set(
+      graph.nodes.filter((node) => node.milestone === milestone).map((node) => node.id),
+    );
+    const findings = graph.findings.filter(
+      (finding) =>
+        nodeIds.has(finding.node_id) &&
+        finding.status === "open" &&
+        (finding.severity === "P0" || finding.severity === "P1"),
+    );
+    const runningAudits = graph.runs.filter(
+      (runRow) =>
+        nodeIds.has(runRow.node_id) && runRow.kind === "audit" && runRow.status === "running",
+    );
+    const blockedNodes = graph.nodes.filter(
+      (node) => node.milestone === milestone && node.status === "blocked",
+    );
+    return output({ milestone, findings, runningAudits, blockedNodes }, json);
+  }
+  if (action === "critical-path") {
+    return output(await criticalPathReport(root, requiredArg(name, "milestone name")), json);
+  }
+  if (action === "next") {
+    const milestone = requiredArg(name, "milestone name");
+    const limit = numberOpt(options.limit);
+    const nodes = (await readyNodes(root)).filter((node) => node.milestone === milestone);
+    return output(formatRows(limit ? nodes.slice(0, limit) : nodes, options), json);
   }
   throw new Error(`Unknown milestone action: ${action}`);
 }
@@ -1103,8 +1768,15 @@ async function nodeNoteCommand(
 ): Promise<void> {
   const id = requiredArg(nodeId, "node id");
   const mode = stringOpt(options.mode) ?? "add";
-  if (mode === "list") return output(await listNodeNotes(root, id), json);
-  return output(await addNodeNote(root, id, required(options.text, "--text")), json);
+  if (mode === "list")
+    return output(await listNodeNotes(root, id, { kinds: parseNoteKindList(options.kind) }), json);
+  return output(
+    await addNodeNote(root, id, required(options.text, "--text"), {
+      kind: strictEnumOpt(options.kind, isNoteKind, "--kind", "note"),
+      evidence: stringOpt(options.evidence),
+    }),
+    json,
+  );
 }
 
 async function nodeInputFromOptions(
@@ -1143,7 +1815,57 @@ async function nodeInputFromOptions(
     statusReason: stringOpt(options["status-reason"]),
     checkCommand: stringOpt(options["check-command"]),
     ciCommand: stringOpt(options["ci-command"]),
+    blockedBy: strictEnumOpt(options["blocked-by"], isBlockerType, "--blocked-by"),
+    blockedReason: stringOpt(options["blocked-reason"]),
+    blockedOwner: stringOpt(options["blocked-owner"]),
   };
+}
+
+async function nodeUpdateFromOptions(
+  root: string,
+  options: Record<string, string | string[] | boolean>,
+): Promise<Parameters<typeof updateNode>[2]> {
+  const fromJson = options["from-json"]
+    ? normalizeNodeUpdate(
+        await readJson(root, required(options["from-json"], "--from-json")),
+        "--from-json",
+      )
+    : {};
+  const spec = options["spec-file"]
+    ? await readTextFile(root, required(options["spec-file"], "--spec-file"))
+    : stringOpt(options.spec);
+  const acceptance = options["acceptance-file"]
+    ? await readTextFile(root, required(options["acceptance-file"], "--acceptance-file"))
+    : stringOpt(options.acceptance);
+  const blockedBy = strictEnumOpt(options["blocked-by"], isBlockerType, "--blocked-by");
+  const status = strictEnumOpt(options.status, isNodeStatus, "--status");
+  const clearBlocker = Boolean(options["clear-blocker"]);
+  const updates = stripUndefinedValues({
+    ...fromJson,
+    title: stringOpt(options.title),
+    kind: strictEnumOpt(options.kind, isNodeKind, "--kind"),
+    milestone: stringOpt(options.milestone),
+    group_name: stringOpt(options.group),
+    projects: options.project ? stringListOpt(options.project) : undefined,
+    status: blockedBy && !status ? "blocked" : status,
+    priority: strictEnumOpt(options.priority, isPriority, "--priority"),
+    estimatePoints: numberOpt(options.estimate),
+    risk: strictEnumOpt(options.risk, isRisk, "--risk"),
+    spec,
+    acceptance,
+    validation: stringOpt(options.validation),
+    verification: options.verify ? stringListOpt(options.verify).map(parseVerification) : undefined,
+    audit_focus: options["audit-focus"] ? stringListOpt(options["audit-focus"]) : undefined,
+    context: stringOpt(options.context),
+    status_reason: stringOpt(options["status-reason"]),
+    check_command: stringOpt(options["check-command"]),
+    ci_command: stringOpt(options["ci-command"]),
+    branch: stringOpt(options.branch),
+    blocked_by: clearBlocker ? null : blockedBy,
+    blocked_reason: clearBlocker ? null : stringOpt(options["blocked-reason"]),
+    blocked_owner: clearBlocker ? null : stringOpt(options["blocked-owner"]),
+  }) as Parameters<typeof updateNode>[2];
+  return updates;
 }
 
 function normalizeNodeInput(raw: unknown, context: string): AddNodeInput {
@@ -1204,6 +1926,141 @@ function normalizeNodeInput(raw: unknown, context: string): AddNodeInput {
     ciCommand:
       optionalStringField(value, "ciCommand", context) ??
       optionalStringField(value, "ci_command", context),
+    blockedBy:
+      optionalEnumField(
+        optionalStringField(value, "blockedBy", context) ??
+          optionalStringField(value, "blocked_by", context),
+        isBlockerType,
+        `${context}.blocked_by`,
+      ) ?? null,
+    blockedReason:
+      optionalStringField(value, "blockedReason", context) ??
+      optionalStringField(value, "blocked_reason", context),
+    blockedOwner:
+      optionalStringField(value, "blockedOwner", context) ??
+      optionalStringField(value, "blocked_owner", context),
+  };
+}
+
+function normalizeNodeUpdate(raw: unknown, context: string): Parameters<typeof updateNode>[2] {
+  const value = asRecord(raw, context);
+  const blockedBy = optionalEnumField(
+    optionalStringField(value, "blockedBy", context) ??
+      optionalStringField(value, "blocked_by", context),
+    isBlockerType,
+    `${context}.blocked_by`,
+  );
+  const status = optionalEnumField(
+    optionalStringField(value, "status", context),
+    isNodeStatus,
+    `${context}.status`,
+  );
+  return stripUndefinedValues({
+    title: optionalStringField(value, "title", context),
+    kind: optionalEnumField(
+      optionalStringField(value, "kind", context),
+      isNodeKind,
+      `${context}.kind`,
+    ),
+    milestone: nullableStringField(value, "milestone", context),
+    group_name:
+      nullableStringField(value, "groupName", context) ??
+      nullableStringField(value, "group_name", context) ??
+      nullableStringField(value, "group", context),
+    projects: optionalStringArrayField(value, "projects", context),
+    status: blockedBy && !status ? "blocked" : status,
+    priority: optionalEnumField(
+      optionalStringField(value, "priority", context),
+      isPriority,
+      `${context}.priority`,
+    ),
+    estimatePoints:
+      optionalNumberField(value, "estimatePoints", context) ??
+      optionalNumberField(value, "estimate_points", context) ??
+      optionalNumberField(value, "estimate", context),
+    risk: optionalEnumField(optionalStringField(value, "risk", context), isRisk, `${context}.risk`),
+    spec: optionalStringField(value, "spec", context),
+    acceptance: optionalStringField(value, "acceptance", context),
+    validation: nullableStringField(value, "validation", context),
+    verification:
+      value.verification === undefined
+        ? undefined
+        : normalizeVerificationArray(value.verification, `${context}.verification`),
+    audit_focus:
+      optionalStringArrayField(value, "auditFocus", context) ??
+      optionalStringArrayField(value, "audit_focus", context),
+    context: nullableStringField(value, "context", context),
+    status_reason:
+      nullableStringField(value, "statusReason", context) ??
+      nullableStringField(value, "status_reason", context),
+    check_command:
+      nullableStringField(value, "checkCommand", context) ??
+      nullableStringField(value, "check_command", context),
+    ci_command:
+      nullableStringField(value, "ciCommand", context) ??
+      nullableStringField(value, "ci_command", context),
+    branch: nullableStringField(value, "branch", context),
+    blocked_by: blockedBy,
+    blocked_reason:
+      nullableStringField(value, "blockedReason", context) ??
+      nullableStringField(value, "blocked_reason", context),
+    blocked_owner:
+      nullableStringField(value, "blockedOwner", context) ??
+      nullableStringField(value, "blocked_owner", context),
+  }) as Parameters<typeof updateNode>[2];
+}
+
+function qdNodeFromInput(
+  input: AddNodeInput,
+  id: string,
+  now: string,
+): GraphSnapshot["nodes"][number] {
+  return {
+    id,
+    title: input.title,
+    kind: input.kind ?? "feature",
+    milestone: input.milestone ?? null,
+    group_name: input.groupName ?? null,
+    projects: input.projects ?? [],
+    status: input.status ?? "ready",
+    priority: input.priority ?? "P2",
+    estimate_points: input.estimatePoints ?? 1,
+    risk: input.risk ?? "medium",
+    owner: null,
+    branch: null,
+    spec: input.spec,
+    acceptance: input.acceptance,
+    validation: input.validation ?? null,
+    verification: input.verification ?? [],
+    audit_focus: input.auditFocus ?? [],
+    context: input.context ?? null,
+    status_reason: input.statusReason ?? null,
+    check_command: input.checkCommand ?? null,
+    ci_command: input.ciCommand ?? null,
+    blocked_by: input.blockedBy ?? null,
+    blocked_reason: input.blockedReason ?? null,
+    blocked_owner: input.blockedOwner ?? null,
+    created_at: now,
+    updated_at: now,
+    claimed_at: null,
+    done_at: null,
+  };
+}
+
+function registriesFromNodes(
+  nodes: GraphSnapshot["nodes"],
+  now: string,
+): GraphSnapshot["registries"] {
+  return {
+    groups: [...new Set(nodes.map((node) => node.group_name).filter(isNonEmptyString))]
+      .sort()
+      .map((name) => ({ name, created_at: now })),
+    projects: [...new Set(nodes.flatMap((node) => node.projects))]
+      .sort()
+      .map((name) => ({ name, created_at: now })),
+    milestones: [...new Set(nodes.map((node) => node.milestone).filter(isNonEmptyString))]
+      .sort()
+      .map((name, index) => ({ name, rank: index + 1, created_at: now })),
   };
 }
 
@@ -1253,6 +2110,18 @@ function optionalStringField(
   return raw;
 }
 
+function nullableStringField(
+  value: Record<string, unknown>,
+  key: string,
+  context: string,
+): string | null | undefined {
+  const raw = value[key];
+  if (raw === undefined) return undefined;
+  if (raw === null) return null;
+  if (typeof raw !== "string") throw new Error(`${context}.${key} must be a string or null`);
+  return raw;
+}
+
 function optionalNumberField(
   value: Record<string, unknown>,
   key: string,
@@ -1277,6 +2146,14 @@ function optionalStringArrayField(
     throw new Error(`${context}.${key} must be an array of strings`);
   }
   return raw;
+}
+
+function strictStringArrayField(
+  value: Record<string, unknown>,
+  key: string,
+  context: string,
+): string[] {
+  return optionalStringArrayField(value, key, context) ?? [];
 }
 
 function normalizeVerificationArray(value: unknown, context: string): VerificationEntry[] {
@@ -1307,6 +2184,7 @@ async function importCommand(
   const dryRun = Boolean(options["dry-run"]);
   const verbose = Boolean(options.verbose);
   const allowDefaults = Boolean(options["allow-defaults"]);
+  const merge = Boolean(options.merge);
   if (adapter && mappingPath) {
     throw new Error("qd import --adapter cannot be combined with --schema-mapping");
   }
@@ -1330,7 +2208,10 @@ async function importCommand(
       importedRuns: dryRun ? 0 : canonicalSnapshot.runs.length,
       importedNodeNotes: dryRun ? 0 : canonicalSnapshot.node_notes.length,
     };
-    if (!dryRun) await restoreGraphSnapshot(root, canonicalSnapshot);
+    if (!dryRun) {
+      if (merge) await replaceGraphSnapshot(root, canonicalSnapshot);
+      else await restoreGraphSnapshot(root, canonicalSnapshot);
+    }
     return output(report, json);
   }
   const mapping = mappingPath
@@ -1468,17 +2349,47 @@ async function importCommand(
 
   if (report.errors.length === 0 && !dryRun) {
     const existingNodes = await listNodes(root);
-    if (existingNodes.length > 0) {
+    if (existingNodes.length > 0 && !merge) {
       report.errors.push(
-        "qd import requires an empty qd DAG. Run imports before creating nodes, or use --dry-run to inspect a mapping.",
+        "qd import requires an empty qd DAG. Run imports before creating nodes, use --merge for explicit sync semantics, or use --dry-run to inspect a mapping.",
       );
     }
   }
 
   if (report.errors.length === 0 && !dryRun) {
-    for (const planned of plannedNodes) importedNodes.push(await addNode(root, planned.input));
-    for (const edge of plannedImportEdges) {
-      importedEdges.push(await addEdge(root, edge.from, edge.to, edge.type));
+    if (merge) {
+      const now = new Date().toISOString();
+      const nodesForSnapshot = plannedNodes.map((node) =>
+        qdNodeFromInput(node.input, node.input.id ?? node.sourceId, now),
+      );
+      const snapshot: GraphSnapshot = {
+        schema_version: 1,
+        exported_at: now,
+        registries: registriesFromNodes(nodesForSnapshot, now),
+        nodes: nodesForSnapshot,
+        edges: plannedImportEdges.map((edge) => ({
+          from_node: edge.from,
+          to_node: edge.to,
+          type: edge.type,
+          created_at: now,
+        })),
+        findings: [],
+        runs: [],
+        node_notes: [],
+        assignments: [],
+        waves: [],
+        wave_memberships: [],
+      };
+      await replaceGraphSnapshot(root, snapshot);
+      importedNodes.push(...snapshot.nodes);
+      importedEdges.push(...plannedImportEdges);
+    } else {
+      const created = await addNodesBulk(root, {
+        nodes: plannedNodes.map((node) => node.input),
+        edges: plannedImportEdges,
+      });
+      importedNodes.push(...created.nodes);
+      importedEdges.push(...created.edges);
     }
   }
 
@@ -1492,6 +2403,131 @@ async function importCommand(
   report.ok = report.errors.length === 0;
   output(report, json);
   if (!report.ok) process.exitCode = 1;
+}
+
+async function syncCommand(
+  root: string,
+  options: Record<string, string | string[] | boolean>,
+  json: boolean,
+): Promise<void> {
+  const filePath = path.resolve(root, required(options.from, "--from"));
+  const snapshot = canonicalSnapshotFrom(JSON.parse(await readFile(filePath, "utf8")) as unknown);
+  if (!snapshot) throw new Error("qd sync requires a canonical qd export JSON file");
+  await replaceGraphSnapshot(root, snapshot);
+  return output(
+    {
+      ok: true,
+      path: path.relative(root, filePath),
+      nodes: snapshot.nodes.length,
+      edges: snapshot.edges.length,
+      findings: snapshot.findings.length,
+      runs: snapshot.runs.length,
+      nodeNotes: snapshot.node_notes.length,
+    },
+    json,
+  );
+}
+
+async function stateCommand(
+  root: string,
+  action: string | undefined,
+  options: Record<string, string | string[] | boolean>,
+  json: boolean,
+): Promise<void> {
+  if (action === "diff") {
+    const against = path.resolve(root, required(options["against-export"], "--against-export"));
+    const exportSnapshot = canonicalSnapshotFrom(
+      JSON.parse(await readFile(against, "utf8")) as unknown,
+    );
+    if (!exportSnapshot) throw new Error("--against-export must be a canonical qd export");
+    const live = await graphSnapshot(root);
+    const result = snapshotDiff(live, exportSnapshot);
+    output(result, json);
+    if (!result.ok) process.exitCode = 1;
+    return;
+  }
+  if (action === "rebuild") {
+    const from = path.resolve(root, required(options["from-export"], "--from-export"));
+    const snapshot = canonicalSnapshotFrom(JSON.parse(await readFile(from, "utf8")) as unknown);
+    if (!snapshot) throw new Error("--from-export must be a canonical qd export");
+    await replaceGraphSnapshot(root, snapshot);
+    return output({ ok: true, rebuiltFrom: path.relative(root, from) }, json);
+  }
+  if (action === "reconcile") {
+    const prefer = stringOpt(options.prefer);
+    if (prefer !== "export") throw new Error("state reconcile currently supports --prefer export");
+    const from = path.resolve(root, required(options["from-export"], "--from-export"));
+    const snapshot = canonicalSnapshotFrom(JSON.parse(await readFile(from, "utf8")) as unknown);
+    if (!snapshot) throw new Error("--from-export must be a canonical qd export");
+    await replaceGraphSnapshot(root, snapshot);
+    return output({ ok: true, preferred: "export", source: path.relative(root, from) }, json);
+  }
+  throw new Error(`Unknown state action: ${action}`);
+}
+
+async function envCommand(
+  action: string | undefined,
+  options: Record<string, string | string[] | boolean>,
+  json: boolean,
+): Promise<void> {
+  if (action !== "check") throw new Error(`Unknown env action: ${action}`);
+  const requiredNames = stringListOpt(options.required).flatMap((item) => item.split(","));
+  const entries = requiredNames
+    .map((name) => name.trim())
+    .filter(Boolean)
+    .map((name) => ({
+      name,
+      present: process.env[name] !== undefined,
+      value: options.mask ? "***" : null,
+    }));
+  const result = { ok: entries.every((entry) => entry.present), required: entries };
+  output(result, json);
+  if (!result.ok) process.exitCode = 1;
+}
+
+function schemaCommand(action: string | undefined, name: string | undefined, json: boolean): void {
+  const schemas = {
+    "audit-report": auditReportSchema(),
+    "finding-import": findingImportSchema(),
+    assignment: assignmentSchema(),
+    verification: verificationSchema(),
+    "external-ci": externalCiSchema(),
+    wave: waveSchema(),
+  };
+  if (action === "list" || !action) return output(Object.keys(schemas), json);
+  if (action === "print") {
+    const schema = schemas[requiredArg(name, "schema name") as keyof typeof schemas];
+    if (!schema) throw new Error(`Unknown schema: ${name}`);
+    return output(schema, true);
+  }
+  throw new Error(`Unknown schema action: ${action}`);
+}
+
+async function readinessCommand(
+  root: string,
+  nodeId: string | undefined,
+  kind: "merge" | "completion",
+  json: boolean,
+): Promise<void> {
+  const id = requiredArg(nodeId, "node id");
+  const node = await getNode(root, id);
+  const gate = await gateNode(root, id);
+  const latestCheck = await latestRun(root, id, "check");
+  const latestCi = await latestRun(root, id, "ci");
+  const result = {
+    ok:
+      gate.ok &&
+      (kind === "completion" || node.status === "mergeable") &&
+      (kind === "completion" || latestCi?.status === "passed"),
+    kind,
+    node,
+    gate,
+    latestCheck: latestCheck ?? null,
+    latestCi: latestCi ?? null,
+    next: nextStepForNode(node, gate, latestCheck ?? null, latestCi ?? null),
+  };
+  output(result, json);
+  if (!result.ok) process.exitCode = 1;
 }
 
 async function promptCommand(
@@ -1574,6 +2610,9 @@ async function executeConfiguredCheck(
     nodeCommand ??
     (kind === "ci" ? config.ciCommand : config.checkCommand);
   if (!command.trim()) throw new Error(`${kind}_command is empty; configure it or pass --cmd`);
+  if (!options["no-hooks"] && config.hooks.preCheck.trim()) {
+    await runPolicyHook(root, config.hooks.preCheck, { root, node: nodeId, command });
+  }
   const paths = getProjectPaths(root);
   await mkdir(paths.logsDir, { recursive: true });
   const startedAt = new Date().toISOString();
@@ -1581,20 +2620,34 @@ async function executeConfiguredCheck(
     paths.logsDir,
     `${kind}-${nodeId}-${startedAt.replace(/[:.]/g, "-")}.log`,
   );
-  const exitCode = await runShellCommand(command, root, logPath);
+  const execution = await runShellCommand(command, root, logPath, {
+    timeoutSeconds: kind === "ci" ? config.ciTimeoutSeconds : config.checkTimeoutSeconds,
+    noOutputTimeoutSeconds:
+      kind === "ci" ? config.ciNoOutputTimeoutSeconds : config.checkNoOutputTimeoutSeconds,
+  });
+  if (!options["no-hooks"] && config.hooks.postCheck.trim()) {
+    await runPolicyHook(root, config.hooks.postCheck, {
+      root,
+      node: nodeId,
+      command,
+      log: logPath,
+    });
+  }
   const finishedAt = new Date().toISOString();
-  const status = exitCode === 0 ? "passed" : "failed";
+  const status = execution.exitCode === 0 ? "passed" : execution.timedOut ? "timed_out" : "failed";
   const recorder = kind === "ci" ? recordCiResult : recordCheckResult;
   const updatedNode = await recorder(root, nodeId, {
-    status,
+    status: status === "passed" ? "passed" : "failed",
     summary: `${kind} command ${status}: ${command}`,
     logPath,
     startedAt,
     finishedAt,
   });
   const result = {
-    ok: exitCode === 0,
-    exitCode,
+    ok: execution.exitCode === 0,
+    exitCode: execution.exitCode,
+    timedOut: execution.timedOut,
+    noOutputTimedOut: execution.noOutputTimedOut,
     command,
     logPath,
     node: updatedNode,
@@ -1620,25 +2673,116 @@ function isExceptedDirtyPath(filePath: string, except: string[]): boolean {
   );
 }
 
-function runShellCommand(command: string, cwd: string, logPath: string): Promise<number> {
+function runShellCommand(
+  command: string,
+  cwd: string,
+  logPath: string,
+  options: { timeoutSeconds?: number; noOutputTimeoutSeconds?: number } = {},
+): Promise<{ exitCode: number; timedOut: boolean; noOutputTimedOut: boolean }> {
   return new Promise((resolve, reject) => {
+    let settled = false;
+    let lastOutputAt = Date.now();
+    let timedOut = false;
+    let noOutputTimedOut = false;
     const child = spawn(command, {
       cwd,
       env: { ...process.env, QD_ROOT: cwd },
       shell: true,
       stdio: ["ignore", "pipe", "pipe"],
     });
+    const timeout =
+      options.timeoutSeconds && options.timeoutSeconds > 0
+        ? setTimeout(() => {
+            timedOut = true;
+            child.kill("SIGTERM");
+          }, options.timeoutSeconds * 1000)
+        : null;
+    const noOutput =
+      options.noOutputTimeoutSeconds && options.noOutputTimeoutSeconds > 0
+        ? setInterval(
+            () => {
+              if (Date.now() - lastOutputAt > (options.noOutputTimeoutSeconds ?? 0) * 1000) {
+                timedOut = true;
+                noOutputTimedOut = true;
+                child.kill("SIGTERM");
+              }
+            },
+            Math.min((options.noOutputTimeoutSeconds ?? 1) * 1000, 30_000),
+          )
+        : null;
+    const cleanup = () => {
+      if (timeout) clearTimeout(timeout);
+      if (noOutput) clearInterval(noOutput);
+    };
     child.stdout.on("data", (chunk: Buffer) => {
+      lastOutputAt = Date.now();
       process.stdout.write(chunk);
       void appendFile(logPath, chunk);
     });
     child.stderr.on("data", (chunk: Buffer) => {
+      lastOutputAt = Date.now();
       process.stderr.write(chunk);
       void appendFile(logPath, chunk);
     });
-    child.on("error", reject);
-    child.on("exit", (code: number | null) => resolve(code ?? 1));
+    child.on("error", (error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error);
+    });
+    child.on("exit", (code: number | null, signal: NodeJS.Signals | null) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve({ exitCode: signal ? 124 : (code ?? 1), timedOut, noOutputTimedOut });
+    });
   });
+}
+
+async function runPolicyHook(
+  root: string,
+  command: string,
+  placeholders: Record<string, string>,
+): Promise<void> {
+  const rendered = Object.entries(placeholders).reduce(
+    (current, [key, value]) => current.replaceAll(`{${key}}`, shellQuote(value)),
+    command,
+  );
+  const result = await captureShellCommand(rendered, root);
+  if (result.code !== 0) {
+    throw new Error(
+      `Policy hook failed (${result.code}): ${rendered}\n${result.stderr || result.stdout}`,
+    );
+  }
+}
+
+function captureShellCommand(
+  command: string,
+  cwd: string,
+): Promise<{ code: number; stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, {
+      cwd,
+      shell: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
+    child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));
+    child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
+    child.on("error", reject);
+    child.on("exit", (code: number | null) =>
+      resolve({
+        code: code ?? 1,
+        stdout: Buffer.concat(stdout).toString("utf8"),
+        stderr: Buffer.concat(stderr).toString("utf8"),
+      }),
+    );
+  });
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
 function captureCommand(
@@ -1693,7 +2837,7 @@ async function agentCommand(
       json,
     );
   }
-  if (action === "doctor") return doctor(root, json);
+  if (action === "doctor") return doctor(root, options, json);
   throw new Error(`Unknown agent action: ${action}`);
 }
 
@@ -1723,6 +2867,9 @@ interface ImportMapping {
   auditFocus?: string;
   context?: string;
   statusReason?: string;
+  blockedBy?: string;
+  blockedReason?: string;
+  blockedOwner?: string;
   statusMap?: Record<string, NodeStatus>;
   nodeEdges?: ImportNodeEdgesMapping;
   edgeFrom?: string;
@@ -1792,6 +2939,9 @@ const defaultImportMapping: ImportMapping = {
   auditFocus: "audit_focus",
   context: "context",
   statusReason: "status_reason",
+  blockedBy: "blocked_by",
+  blockedReason: "blocked_reason",
+  blockedOwner: "blocked_owner",
   edgeFrom: "from_node",
   edgeTo: "to_node",
   edgeType: "type",
@@ -1819,6 +2969,38 @@ const EDGE_TYPES = ["requires", "unblocks", "supersedes", "related"] as const;
 const FINDING_STATUSES = ["open", "resolved", "promoted", "dismissed"] as const;
 const VERIFICATION_TYPES = ["command", "manual", "url", "note"] as const;
 const MERGE_STRATEGIES = ["squash", "merge", "rebase"] as const;
+const BLOCKER_TYPES = ["manual", "external", "policy"] as const;
+const RUN_KINDS = [
+  "implement",
+  "audit",
+  "resolve",
+  "check",
+  "ci",
+  "verification",
+  "merge",
+] as const;
+const ASSIGNMENT_ROLES = [
+  "planner",
+  "worker",
+  "auditor",
+  "repair",
+  "reviewer",
+  "explorer",
+] as const;
+const ASSIGNMENT_STATUSES = ["open", "complete", "failed", "cancelled"] as const;
+const WAVE_KINDS = ["implementation", "audit", "repair", "planning", "release"] as const;
+const NOTE_KINDS = [
+  "note",
+  "blocker",
+  "retry",
+  "external-dependency",
+  "operator-instruction",
+  "audit-disposition",
+  "live-run-attempt",
+  "environment-preflight",
+  "risk-acceptance",
+  "migration-note",
+] as const;
 
 function mapImportNode(
   raw: unknown,
@@ -1872,6 +3054,14 @@ function mapImportNode(
     ),
     context: stringAt(raw, mapping.context ?? "context"),
     statusReason: stringAt(raw, mapping.statusReason ?? "statusReason"),
+    blockedBy:
+      optionalEnumField(
+        stringAt(raw, mapping.blockedBy ?? "blocked_by"),
+        isBlockerType,
+        `node ${id}.blocked_by`,
+      ) ?? null,
+    blockedReason: stringAt(raw, mapping.blockedReason ?? "blocked_reason"),
+    blockedOwner: stringAt(raw, mapping.blockedOwner ?? "blocked_owner"),
   };
   if (verbose)
     importVerbose(
@@ -2036,6 +3226,9 @@ function usedNodeMappingKeys(mapping: ImportMapping): Set<string> {
     mapping.auditFocus ?? "auditFocus",
     mapping.context ?? "context",
     mapping.statusReason ?? "statusReason",
+    mapping.blockedBy ?? "blocked_by",
+    mapping.blockedReason ?? "blocked_reason",
+    mapping.blockedOwner ?? "blocked_owner",
   ]) {
     keys.add(topLevelKey(value));
   }
@@ -2309,7 +3502,15 @@ function openUrl(url: string): void {
 function parseArgs(argv: string[]): ParsedArgs {
   const command: string[] = [];
   const options: Record<string, string | string[] | boolean> = {};
-  const repeatableOptions = new Set(["project", "verify", "audit-focus", "repo"]);
+  const repeatableOptions = new Set([
+    "project",
+    "verify",
+    "verification",
+    "audit-focus",
+    "repo",
+    "commit",
+    "evidence",
+  ]);
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (!arg) continue;
@@ -2346,6 +3547,10 @@ function output(value: unknown, json: boolean): void {
   }
   if (Array.isArray(value)) {
     console.table(value);
+    return;
+  }
+  if (typeof value === "string") {
+    console.log(value);
     return;
   }
   console.log(JSON.stringify(value, null, 2));
@@ -2397,6 +3602,34 @@ function setConfigValue(config: QdConfig, key: string, value: string): QdConfig 
   if (key === "require_ci_before_merge" || key === "require-ci-before-merge") {
     return { ...config, requireCiBeforeMerge: parseBoolean(value, key) };
   }
+  if (key === "export_default_out" || key === "export-default-out") {
+    return { ...config, exportDefaultOut: value };
+  }
+  if (key === "export_canonicalize_command" || key === "export-canonicalize-command") {
+    return { ...config, exportCanonicalizeCommand: value };
+  }
+  if (key.startsWith("hooks_") || key.startsWith("hooks-")) {
+    const hookKey = key.replace(/^hooks[-_]/, "");
+    const hooks = { ...config.hooks };
+    if (hookKey === "pre_claim" || hookKey === "pre-claim") hooks.preClaim = value;
+    else if (hookKey === "post_claim" || hookKey === "post-claim") hooks.postClaim = value;
+    else if (hookKey === "pre_check" || hookKey === "pre-check") hooks.preCheck = value;
+    else if (hookKey === "post_check" || hookKey === "post-check") hooks.postCheck = value;
+    else if (hookKey === "pre_gate" || hookKey === "pre-gate") hooks.preGate = value;
+    else if (hookKey === "post_export" || hookKey === "post-export") hooks.postExport = value;
+    else if (hookKey === "pre_merge" || hookKey === "pre-merge") hooks.preMerge = value;
+    else if (hookKey === "post_merge" || hookKey === "post-merge") hooks.postMerge = value;
+    else throw new Error(`Unknown config key: ${key}`);
+    return { ...config, hooks };
+  }
+  if (key === "check_timeout_seconds" || key === "check-timeout-seconds")
+    return { ...config, checkTimeoutSeconds: parsePositiveInteger(value, key) };
+  if (key === "check_no_output_timeout_seconds" || key === "check-no-output-timeout-seconds")
+    return { ...config, checkNoOutputTimeoutSeconds: parsePositiveInteger(value, key) };
+  if (key === "ci_timeout_seconds" || key === "ci-timeout-seconds")
+    return { ...config, ciTimeoutSeconds: parsePositiveInteger(value, key) };
+  if (key === "ci_no_output_timeout_seconds" || key === "ci-no-output-timeout-seconds")
+    return { ...config, ciNoOutputTimeoutSeconds: parsePositiveInteger(value, key) };
   throw new Error(`Unknown config key: ${key}`);
 }
 
@@ -2441,7 +3674,32 @@ function getConfigValue(config: QdConfig, key: string): unknown {
     return config.requireGateBeforeCi;
   if (key === "require_ci_before_merge" || key === "require-ci-before-merge")
     return config.requireCiBeforeMerge;
+  if (key === "export_default_out" || key === "export-default-out") return config.exportDefaultOut;
+  if (key === "export_canonicalize_command" || key === "export-canonicalize-command")
+    return config.exportCanonicalizeCommand;
+  if (key === "hooks" || key === "hook") return config.hooks;
+  if (key === "hooks_pre_claim" || key === "hooks-pre-claim") return config.hooks.preClaim;
+  if (key === "hooks_post_claim" || key === "hooks-post-claim") return config.hooks.postClaim;
+  if (key === "hooks_pre_check" || key === "hooks-pre-check") return config.hooks.preCheck;
+  if (key === "hooks_post_check" || key === "hooks-post-check") return config.hooks.postCheck;
+  if (key === "hooks_pre_gate" || key === "hooks-pre-gate") return config.hooks.preGate;
+  if (key === "hooks_post_export" || key === "hooks-post-export") return config.hooks.postExport;
+  if (key === "hooks_pre_merge" || key === "hooks-pre-merge") return config.hooks.preMerge;
+  if (key === "hooks_post_merge" || key === "hooks-post-merge") return config.hooks.postMerge;
+  if (key === "check_timeout_seconds" || key === "check-timeout-seconds")
+    return config.checkTimeoutSeconds;
+  if (key === "check_no_output_timeout_seconds" || key === "check-no-output-timeout-seconds")
+    return config.checkNoOutputTimeoutSeconds;
+  if (key === "ci_timeout_seconds" || key === "ci-timeout-seconds") return config.ciTimeoutSeconds;
+  if (key === "ci_no_output_timeout_seconds" || key === "ci-no-output-timeout-seconds")
+    return config.ciNoOutputTimeoutSeconds;
   throw new Error(`Unknown config key: ${key}`);
+}
+
+function parsePositiveInteger(value: string, key: string): number {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isInteger(parsed) || parsed < 1) throw new Error(`${key} must be a positive integer`);
+  return parsed;
 }
 
 function parseBoolean(value: string, key: string): boolean {
@@ -2511,6 +3769,18 @@ function strictOptionalEnum<T extends string>(
   return value;
 }
 
+function optionalEnumField<T extends string>(
+  value: string | undefined,
+  isValue: (candidate: string) => candidate is T,
+  label: string,
+): T | undefined {
+  if (!value) return undefined;
+  if (!isValue(value)) {
+    throw new Error(`${label} must be one of ${validValuesFor(isValue).join(", ")}`);
+  }
+  return value;
+}
+
 function strictEnum<T extends string>(
   value: string,
   isValue: (candidate: string) => candidate is T,
@@ -2529,6 +3799,12 @@ function validValuesFor(isValue: (candidate: string) => boolean): readonly strin
   if (isValue === isEdgeType) return EDGE_TYPES;
   if (isValue === isFindingStatus) return FINDING_STATUSES;
   if (isValue === isMergeStrategy) return MERGE_STRATEGIES;
+  if (isValue === isBlockerType) return BLOCKER_TYPES;
+  if (isValue === isRunKind) return RUN_KINDS;
+  if (isValue === isAssignmentRole) return ASSIGNMENT_ROLES;
+  if (isValue === isAssignmentStatus) return ASSIGNMENT_STATUSES;
+  if (isValue === isWaveKind) return WAVE_KINDS;
+  if (isValue === isNoteKind) return NOTE_KINDS;
   return [];
 }
 
@@ -2565,8 +3841,32 @@ function isMergeStrategy(value: string): value is QdConfig["mergeStrategy"] {
   return (MERGE_STRATEGIES as readonly string[]).includes(value);
 }
 
+function isBlockerType(value: string): value is BlockerType {
+  return (BLOCKER_TYPES as readonly string[]).includes(value);
+}
+
 function isVerificationType(value: string): value is VerificationEntry["type"] {
   return (VERIFICATION_TYPES as readonly string[]).includes(value);
+}
+
+function isRunKind(value: string): value is QdRun["kind"] {
+  return (RUN_KINDS as readonly string[]).includes(value);
+}
+
+function isAssignmentRole(value: string): value is Parameters<typeof addAssignment>[1]["role"] {
+  return (ASSIGNMENT_ROLES as readonly string[]).includes(value);
+}
+
+function isAssignmentStatus(value: string): value is "open" | "complete" | "failed" | "cancelled" {
+  return (ASSIGNMENT_STATUSES as readonly string[]).includes(value);
+}
+
+function isWaveKind(value: string): value is Parameters<typeof startWave>[1]["kind"] {
+  return (WAVE_KINDS as readonly string[]).includes(value);
+}
+
+function isNoteKind(value: string): value is NoteKind {
+  return (NOTE_KINDS as readonly string[]).includes(value);
 }
 
 function parseSeverityList(value: string | string[] | boolean | undefined): Priority[] | undefined {
@@ -2591,6 +3891,16 @@ function parseStatusList(value: string | string[] | boolean | undefined): NodeSt
   });
 }
 
+function parseNoteKindList(value: string | string[] | boolean | undefined): NoteKind[] | undefined {
+  const raw = stringListOpt(value).flatMap((item) => item.split(","));
+  if (raw.length === 0) return undefined;
+  return raw.map((item) => {
+    const kind = item.trim();
+    if (!isNoteKind(kind)) throw new Error(`--kind must contain one of ${NOTE_KINDS.join(", ")}`);
+    return kind;
+  });
+}
+
 function filterSnapshot(
   snapshot: GraphSnapshot,
   filters: { statuses?: NodeStatus[]; milestone?: string },
@@ -2603,6 +3913,11 @@ function filterSnapshot(
       .map((node) => node.id),
   );
   if (!statuses && !filters.milestone) return snapshot;
+  const assignmentIds = new Set(
+    snapshot.assignments
+      .filter((assignment) => nodeIds.has(assignment.node_id))
+      .map((assignment) => assignment.id),
+  );
   return {
     ...snapshot,
     nodes: snapshot.nodes.filter((node) => nodeIds.has(node.id)),
@@ -2612,7 +3927,291 @@ function filterSnapshot(
     findings: snapshot.findings.filter((finding) => nodeIds.has(finding.node_id)),
     runs: snapshot.runs.filter((run) => nodeIds.has(run.node_id)),
     node_notes: snapshot.node_notes.filter((note) => nodeIds.has(note.node_id)),
+    assignments: snapshot.assignments.filter((assignment) => nodeIds.has(assignment.node_id)),
+    wave_memberships: snapshot.wave_memberships.filter(
+      (membership) =>
+        (membership.node_id && nodeIds.has(membership.node_id)) ||
+        (membership.assignment_id && assignmentIds.has(membership.assignment_id)),
+    ),
   };
+}
+
+function snapshotDiff(
+  live: GraphSnapshot,
+  exported: GraphSnapshot,
+): {
+  ok: boolean;
+  liveOnlyNodes: string[];
+  exportOnlyNodes: string[];
+  changedNodes: string[];
+  liveNodeCount: number;
+  exportNodeCount: number;
+} {
+  const liveById = new Map(live.nodes.map((node) => [node.id, node]));
+  const exportById = new Map(exported.nodes.map((node) => [node.id, node]));
+  const liveOnlyNodes = [...liveById.keys()].filter((id) => !exportById.has(id)).sort();
+  const exportOnlyNodes = [...exportById.keys()].filter((id) => !liveById.has(id)).sort();
+  const changedNodes = [...liveById.keys()]
+    .filter((id) => exportById.has(id))
+    .filter((id) => JSON.stringify(liveById.get(id)) !== JSON.stringify(exportById.get(id)))
+    .sort();
+  return {
+    ok: liveOnlyNodes.length === 0 && exportOnlyNodes.length === 0 && changedNodes.length === 0,
+    liveOnlyNodes,
+    exportOnlyNodes,
+    changedNodes,
+    liveNodeCount: live.nodes.length,
+    exportNodeCount: exported.nodes.length,
+  };
+}
+
+function nextStepForNode(
+  node: GraphSnapshot["nodes"][number],
+  gate: Awaited<ReturnType<typeof gateNode>>,
+  latestCheck: Awaited<ReturnType<typeof latestRun>> | null,
+  latestCi: Awaited<ReturnType<typeof latestRun>> | null,
+): string | null {
+  if (gate.blocking.length > 0) {
+    const finding = gate.blocking[0];
+    return finding ? `qd finding resolve ${finding.id}` : null;
+  }
+  if (gate.runningAudits.length > 0) {
+    const runRow = gate.runningAudits[0];
+    return runRow
+      ? `qd audit pass ${node.id} --run-id ${runRow.id} --from-report <audit-report.json>`
+      : null;
+  }
+  const passedRecoveryRun =
+    latestCheck?.status === "passed"
+      ? latestCheck
+      : latestCi?.status === "passed"
+        ? latestCi
+        : null;
+  if (node.status === "blocked" && passedRecoveryRun) {
+    return `qd unblock ${node.id} --from-run ${passedRecoveryRun.id} --summary "<why it is unblocked>"`;
+  }
+  if (node.status !== "mergeable") return `qd ci run ${node.id}`;
+  if (latestCi?.status !== "passed") return `qd ci run ${node.id}`;
+  return null;
+}
+
+function auditReportSchema(): Record<string, unknown> {
+  return {
+    type: "object",
+    required: ["nodeId", "findings"],
+    properties: {
+      nodeId: { type: "string" },
+      node_id: { type: "string" },
+      findings: {
+        type: "array",
+        items: {
+          type: "object",
+          required: ["severity", "title", "evidence"],
+          properties: {
+            severity: { enum: PRIORITIES },
+            title: { type: "string" },
+            evidence: { type: "string" },
+            path: { type: "string" },
+            line: { type: "number" },
+            expected: { type: "string" },
+            suggested_fix: { type: "string" },
+            suggestedFix: { type: "string" },
+          },
+        },
+      },
+    },
+  };
+}
+
+function findingImportSchema(): Record<string, unknown> {
+  return auditReportSchema().properties
+    ? {
+        type: "object",
+        required: ["severity", "title", "evidence"],
+        properties: {
+          severity: { enum: PRIORITIES },
+          title: { type: "string" },
+          evidence: { type: "string" },
+          path: { type: "string" },
+          line: { type: "number" },
+          expected: { type: "string" },
+          suggested_fix: { type: "string" },
+          suggestedFix: { type: "string" },
+        },
+      }
+    : {};
+}
+
+function assignmentSchema(): Record<string, unknown> {
+  return {
+    type: "object",
+    required: ["nodeId", "role", "owner"],
+    properties: {
+      nodeId: { type: "string" },
+      role: { enum: ASSIGNMENT_ROLES },
+      owner: { type: "string" },
+      branch: { type: "string" },
+      worktreePath: { type: "string" },
+      scope: { type: "string" },
+    },
+  };
+}
+
+function verificationSchema(): Record<string, unknown> {
+  return {
+    type: "object",
+    required: ["type", "value"],
+    properties: {
+      type: { enum: VERIFICATION_TYPES },
+      value: { type: "string" },
+    },
+  };
+}
+
+function externalCiSchema(): Record<string, unknown> {
+  return {
+    type: "object",
+    required: ["nodeId", "status", "summary"],
+    properties: {
+      nodeId: { type: "string" },
+      status: { enum: ["passed", "failed"] },
+      summary: { type: "string" },
+      provider: { type: "string" },
+      externalId: { type: "string" },
+      url: { type: "string" },
+      gitSha: { type: "string" },
+    },
+  };
+}
+
+function waveSchema(): Record<string, unknown> {
+  return {
+    type: "object",
+    required: ["kind", "summary"],
+    properties: {
+      kind: { enum: WAVE_KINDS },
+      summary: { type: "string" },
+      nodes: { type: "array", items: { type: "string" } },
+      assignments: { type: "array", items: { type: "string" } },
+    },
+  };
+}
+
+function validateAuditReport(value: unknown): { ok: true; findings: number } {
+  const report = asRecord(value, "audit report");
+  const findings = valueAtPath(report, "findings");
+  if (!Array.isArray(findings)) throw new Error("audit report findings must be an array");
+  for (const [index, finding] of findings.entries()) {
+    const item = asRecord(finding, `findings[${index}]`);
+    strictEnum(
+      requiredNodeStringField(item, "severity", `findings[${index}]`),
+      isPriority,
+      "severity",
+    );
+    requiredNodeStringField(item, "title", `findings[${index}]`);
+    requiredNodeStringField(item, "evidence", `findings[${index}]`);
+  }
+  return { ok: true, findings: findings.length };
+}
+
+function validateAssignmentReport(value: unknown): { ok: true } {
+  const report = asRecord(value, "assignment report");
+  requiredNodeStringField(report, "nodeId", "assignment report", "node_id");
+  strictEnum(
+    requiredNodeStringField(report, "role", "assignment report"),
+    isAssignmentRole,
+    "role",
+  );
+  requiredNodeStringField(report, "owner", "assignment report");
+  return { ok: true };
+}
+
+function validateVerificationReport(value: unknown): { ok: true } {
+  const report = asRecord(value, "verification report");
+  requiredNodeStringField(report, "nodeId", "verification report", "node_id");
+  const status = requiredNodeStringField(report, "status", "verification report");
+  if (status !== "passed" && status !== "failed") {
+    throw new Error("verification report status must be passed or failed");
+  }
+  return { ok: true };
+}
+
+function filterNodes(
+  nodes: GraphSnapshot["nodes"],
+  options: Record<string, string | string[] | boolean>,
+): GraphSnapshot["nodes"] {
+  const statuses = parseStatusList(options.status);
+  const priorities = parseSeverityList(options.priority);
+  const kind = strictEnumOpt(options.kind, isNodeKind, "--kind");
+  const milestone = stringOpt(options.milestone);
+  const project = stringOpt(options.project);
+  const group = stringOpt(options.group);
+  const limit = numberOpt(options.limit);
+  const filtered = nodes
+    .filter((node) => !statuses || statuses.includes(node.status))
+    .filter((node) => !priorities || priorities.includes(node.priority))
+    .filter((node) => !kind || node.kind === kind)
+    .filter((node) => !milestone || node.milestone === milestone)
+    .filter((node) => !project || node.projects.includes(project))
+    .filter((node) => !group || node.group_name === group)
+    .sort(compareNodeRows);
+  return limit ? filtered.slice(0, limit) : filtered;
+}
+
+function formatRows(
+  rows: Array<Record<string, unknown> | GraphSnapshot["nodes"][number]>,
+  options: Record<string, string | string[] | boolean>,
+): unknown {
+  const fields = stringOpt(options.fields)
+    ?.split(",")
+    .map((field) => field.trim())
+    .filter(Boolean);
+  const shaped = fields
+    ? rows.map((row) =>
+        Object.fromEntries(
+          fields.map((field) => [field, (row as Record<string, unknown>)[field] ?? null]),
+        ),
+      )
+    : rows;
+  if (options.tsv) {
+    const selected = fields ?? Object.keys(shaped[0] ?? {});
+    return [
+      selected.join("\t"),
+      ...shaped.map((row) =>
+        selected.map((field) => formatCell((row as Record<string, unknown>)[field])).join("\t"),
+      ),
+    ].join("\n");
+  }
+  if (options.compact) {
+    return shaped.map((row) => ({
+      id: row.id,
+      title: row.title,
+      status: row.status,
+      priority: row.priority,
+      milestone: row.milestone,
+    }));
+  }
+  return shaped;
+}
+
+function formatCell(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  return JSON.stringify(value);
+}
+
+function compareNodeRows(
+  a: GraphSnapshot["nodes"][number],
+  b: GraphSnapshot["nodes"][number],
+): number {
+  return (
+    (PRIORITIES as readonly string[]).indexOf(a.priority) -
+      (PRIORITIES as readonly string[]).indexOf(b.priority) ||
+    a.estimate_points - b.estimate_points ||
+    a.id.localeCompare(b.id)
+  );
 }
 
 function parseVerification(value: string): VerificationEntry {
@@ -2713,6 +4312,9 @@ function canonicalSnapshotFrom(source: unknown): GraphSnapshot | undefined {
     findings: requiredArrayField(source, "findings"),
     runs: requiredArrayField(source, "runs"),
     node_notes: requiredArrayField(source, "node_notes"),
+    assignments: optionalArrayField(source, "assignments"),
+    waves: optionalArrayField(source, "waves"),
+    wave_memberships: optionalArrayField(source, "wave_memberships"),
   } as GraphSnapshot;
 }
 
@@ -2732,11 +4334,28 @@ function requiredArrayField<T = unknown>(source: Record<string, unknown>, field:
   return value as T[];
 }
 
+function optionalArrayField<T = unknown>(source: Record<string, unknown>, field: string): T[] {
+  const value = source[field];
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw new Error(`qd export ${field} must be an array`);
+  return value as T[];
+}
+
 function formatUnknown(value: unknown): string {
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
     return String(value);
   }
   return JSON.stringify(value) ?? "<unknown>";
+}
+
+function stripUndefinedValues<T extends Record<string, unknown>>(value: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, field]) => field !== undefined),
+  ) as Partial<T>;
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function valueAtPath(source: unknown, pathText: string): unknown {
@@ -2801,7 +4420,7 @@ Global:
 Core:
   qd init
   qd setup [--no-hooks] [--print-agent-url]
-  qd doctor [--json]
+  qd doctor [--strict] [--json]
   qd status [--json]
   qd stats [--json] [--window 7] [--milestone <name>]
   qd snapshot [--json] [--milestone <name>]
@@ -2815,9 +4434,10 @@ Core:
   qd config get ci-command
   qd config set check-command --value "<fast project check command>"
   qd config set ci-provider github --repo owner/name --workflow ci.yml --auth gh-cli
-  qd export [--out roadmap/spec-dag.json]
+  qd export [--out roadmap/spec-dag.json] [--deterministic]
   qd export --status ready,claimed,review --milestone alpha [--json]
-  qd import --from roadmap/spec-dag.json [--schema-mapping qd-import-map.json] [--dry-run] [--verbose]
+  qd import --from roadmap/spec-dag.json [--schema-mapping qd-import-map.json] [--dry-run] [--verbose] [--merge]
+  qd sync --from roadmap/spec-dag.json
   qd import --from docs/ROADMAP.html --adapter roadmap-html [--dry-run]
   qd import --from roadmap.md --adapter markdown-checklist [--dry-run]
   qd workspace status|ready|graph [--json] [--config ~/.config/qd/workspaces.toml] [--repo <path>]
@@ -2829,6 +4449,10 @@ Graph:
   qd nodes add-bulk --from-json <plan.json>
   qd node list|show|edit|cancel|note
   qd node show <id> --full
+  qd node edit <id> --from-json <patch.json>
+  qd node edit <id> --spec-file <path> --acceptance-file <path>
+  qd node edit <id> --blocked-by manual|external|policy --blocked-reason <text> [--blocked-owner <name>]
+  qd node edit <id> --clear-blocker --status ready
   qd note add <node> --text <text>
   qd group register --name <name>
   qd project register --name <name>
@@ -2858,6 +4482,57 @@ Audit:
 Viewer:
   qd view [--host 127.0.0.1] [--port 5173] [--open] [--json]
   qd view --check [--json]`;
+}
+
+function commandHelp(group: string, action?: string): string {
+  const key = [group, action].filter(Boolean).join(" ");
+  const entries: Record<string, string> = {
+    complete:
+      "qd complete <node> --summary <text>\nRecords implementation completion and moves the node to review.",
+    advance:
+      "qd advance <node> --summary <text> [--merge] [--skip-check] [--skip-ci]\nRuns completion, gate, check, CI, and optionally qd merge until a gate fails.",
+    check:
+      "qd check run <node> [--cmd <command>] [--no-hooks]\nRuns the configured fast preflight and records a check run/log.",
+    "check run":
+      "qd check run <node> [--cmd <command>] [--no-hooks]\nMutates qd state with a passed or failed check run.",
+    ci: "qd ci run|poll|record-pass|fail <node>\nRecords full trusted CI evidence. Passing CI makes a node mergeable.",
+    "ci run":
+      "qd ci run <node> [--cmd <command>] [--no-hooks]\nRuns the configured full CI command and records log evidence.",
+    merge:
+      "qd merge <node> [--strategy squash|merge|rebase] [--use-existing-commit <sha>] [--no-hooks]\nRecords qd merge state only; it does not run git merge or open a PR.",
+    audit:
+      "qd audit start|pass|fail|dispose|cancel|supersede|list <node>\nTracks audit run lifecycle and findings.",
+    "audit pass":
+      "qd audit pass <node> --from-report <audit-report.json> [--run-id <id>]\nCloses an audit run as passed, imports findings, blocks on P0/P1, promotes P2/P3.",
+    assignment:
+      "qd assignment add|complete|fail|cancel|list\nRecords opaque external worker/auditor ownership. qd does not launch agents.",
+    wave: "qd wave start|add-node|add-assignment|complete|status\nRecords wave-level orchestration state.",
+    worktree:
+      "qd worktree create|status|list|cleanup <node>\nCreates and tracks git worktrees with branch collision checks.",
+  };
+  return entries[key] ?? entries[group] ?? helpText();
+}
+
+function topicHelp(topic: string): string {
+  const topics: Record<string, string> = {
+    lifecycle:
+      "qd lifecycle: ready -> claim -> complete -> audit -> gate -> check -> ci -> merge.\nP0/P1 findings and running audits block gate. qd records state; external tools do the work.",
+    audits:
+      "qd audits: use qd audit start, qd audit pass/fail --from-report, and qd audit dispose/cancel/supersede with rationale for stale runs.",
+    worktrees:
+      "qd worktrees: use one branch/worktree per active node or assignment. qd refuses duplicate branch/path checkouts and dirty cleanup.",
+    assignments:
+      "qd assignments: record role, owner, branch, worktree, scope, commits, and evidence. Owner strings are opaque and agent-agnostic.",
+    waves:
+      "qd waves: group nodes and assignments into orchestration waves, then complete the wave with a summary.",
+    gates:
+      "qd gates: qd gate blocks on open P0/P1 findings and running audit runs. Merge additionally requires mergeable status and passed CI by default.",
+    export:
+      "qd export: commit deterministic qd JSON, not .qd/qd.db. Configure [export].canonicalize_command for repo formatting hooks.",
+    "agent-agnostic-orchestration":
+      "qd never launches Codex, Claude, or any agent runtime. It records DAG state, assignments, evidence, gates, audits, findings, and exports.",
+  };
+  return topics[topic] ?? helpText();
 }
 
 main().catch((error: unknown) => {

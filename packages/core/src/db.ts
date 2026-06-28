@@ -28,6 +28,26 @@ export interface QdConfig {
   cleanWorktreeExcept: string[];
   requireGateBeforeCi: boolean;
   requireCiBeforeMerge: boolean;
+  exportDefaultOut: string;
+  exportCanonicalizeCommand: string;
+  hooks: {
+    preClaim: string;
+    postClaim: string;
+    preCheck: string;
+    postCheck: string;
+    preGate: string;
+    postExport: string;
+    preMerge: string;
+    postMerge: string;
+  };
+  checkTimeoutSeconds: number;
+  checkNoOutputTimeoutSeconds: number;
+  ciTimeoutSeconds: number;
+  ciNoOutputTimeoutSeconds: number;
+  forbiddenPathGlobs: string[];
+  maskedEnv: string[];
+  broadAuditEvery: number;
+  deepAuditEvery: number;
 }
 
 export const defaultConfig: QdConfig = {
@@ -44,6 +64,26 @@ export const defaultConfig: QdConfig = {
   cleanWorktreeExcept: [".qd/"],
   requireGateBeforeCi: true,
   requireCiBeforeMerge: true,
+  exportDefaultOut: "",
+  exportCanonicalizeCommand: "",
+  hooks: {
+    preClaim: "",
+    postClaim: "",
+    preCheck: "",
+    postCheck: "",
+    preGate: "",
+    postExport: "",
+    preMerge: "",
+    postMerge: "",
+  },
+  checkTimeoutSeconds: 1200,
+  checkNoOutputTimeoutSeconds: 300,
+  ciTimeoutSeconds: 3600,
+  ciNoOutputTimeoutSeconds: 600,
+  forbiddenPathGlobs: [".env", ".env.*", "**/.env", "**/.env.*"],
+  maskedEnv: [],
+  broadAuditEvery: 3,
+  deepAuditEvery: 9,
 };
 
 export async function resolveProjectRoot(
@@ -117,6 +157,36 @@ require_clean_worktree = true
 clean_worktree_except = [".qd/"]
 require_gate_before_ci = true
 require_ci_before_merge = true
+
+[export]
+default_out = ""
+canonicalize_command = ""
+
+[hooks]
+pre_claim = ""
+post_claim = ""
+pre_check = ""
+post_check = ""
+pre_gate = ""
+post_export = ""
+pre_merge = ""
+post_merge = ""
+
+[check]
+timeout_seconds = 1200
+no_output_timeout_seconds = 300
+
+[ci]
+timeout_seconds = 3600
+no_output_timeout_seconds = 600
+
+[secrets]
+forbidden_path_globs = [".env", ".env.*", "**/.env", "**/.env.*"]
+masked_env = []
+
+[waves]
+broad_audit_every = 3
+deep_audit_every = 9
 `,
   );
   await writeIfMissing(
@@ -163,15 +233,40 @@ export function parseConfig(content: string): QdConfig {
     "clean_worktree_except",
     "require_gate_before_ci",
     "require_ci_before_merge",
+    "export_default_out",
+    "export_canonicalize_command",
+    "hooks_pre_claim",
+    "hooks_post_claim",
+    "hooks_pre_check",
+    "hooks_post_check",
+    "hooks_pre_gate",
+    "hooks_post_export",
+    "hooks_pre_merge",
+    "hooks_post_merge",
+    "check_timeout_seconds",
+    "check_no_output_timeout_seconds",
+    "ci_timeout_seconds",
+    "ci_no_output_timeout_seconds",
+    "secrets_forbidden_path_globs",
+    "secrets_masked_env",
+    "waves_broad_audit_every",
+    "waves_deep_audit_every",
   ]);
+  let section = "";
   for (const [index, rawLine] of content.split(/\r?\n/).entries()) {
     const line = rawLine.replace(/#.*$/, "").trim();
     if (!line) continue;
+    const sectionMatch = /^\[(?<section>[a-zA-Z0-9_]+)\]$/.exec(line);
+    if (sectionMatch?.groups?.section) {
+      section = sectionMatch.groups.section;
+      continue;
+    }
     const match = /^([a-zA-Z0-9_]+)\s*=\s*(.+)$/.exec(line);
     if (!match) throw new Error(`line ${index + 1} is not a supported key = value assignment`);
-    const key = match[1];
+    const rawKey = match[1];
     const rawValue = match[2];
-    if (!key || !rawValue) throw new Error(`line ${index + 1} is missing a key or value`);
+    if (!rawKey || !rawValue) throw new Error(`line ${index + 1} is missing a key or value`);
+    const key = section ? `${section}_${rawKey}` : rawKey;
     if (!allowedKeys.has(key)) throw new Error(`unknown config key: ${key}`);
     values[key] = parseTomlValue(rawValue.trim());
   }
@@ -190,7 +285,43 @@ export function parseConfig(content: string): QdConfig {
     cleanWorktreeExcept: requiredStringArrayValue(values, "clean_worktree_except"),
     requireGateBeforeCi: requiredBooleanValue(values, "require_gate_before_ci"),
     requireCiBeforeMerge: requiredBooleanValue(values, "require_ci_before_merge"),
+    exportDefaultOut: optionalStringValue(values, "export_default_out"),
+    exportCanonicalizeCommand: optionalStringValue(values, "export_canonicalize_command"),
+    hooks: {
+      preClaim: optionalStringValue(values, "hooks_pre_claim"),
+      postClaim: optionalStringValue(values, "hooks_post_claim"),
+      preCheck: optionalStringValue(values, "hooks_pre_check"),
+      postCheck: optionalStringValue(values, "hooks_post_check"),
+      preGate: optionalStringValue(values, "hooks_pre_gate"),
+      postExport: optionalStringValue(values, "hooks_post_export"),
+      preMerge: optionalStringValue(values, "hooks_pre_merge"),
+      postMerge: optionalStringValue(values, "hooks_post_merge"),
+    },
+    checkTimeoutSeconds: optionalNumberValue(values, "check_timeout_seconds", 1200),
+    checkNoOutputTimeoutSeconds: optionalNumberValue(
+      values,
+      "check_no_output_timeout_seconds",
+      300,
+    ),
+    ciTimeoutSeconds: optionalNumberValue(values, "ci_timeout_seconds", 3600),
+    ciNoOutputTimeoutSeconds: optionalNumberValue(values, "ci_no_output_timeout_seconds", 600),
+    forbiddenPathGlobs: optionalStringArrayValue(values, "secrets_forbidden_path_globs", [
+      ".env",
+      ".env.*",
+      "**/.env",
+      "**/.env.*",
+    ]),
+    maskedEnv: optionalStringArrayValue(values, "secrets_masked_env", []),
+    broadAuditEvery: optionalNumberValue(values, "waves_broad_audit_every", 3),
+    deepAuditEvery: optionalNumberValue(values, "waves_deep_audit_every", 9),
   };
+}
+
+function optionalStringValue(values: Record<string, unknown>, key: string): string {
+  const value = values[key];
+  if (value === undefined) return "";
+  if (typeof value !== "string") throw new Error(`${key} must be a string`);
+  return value;
 }
 
 function requiredStringValue(
@@ -218,10 +349,36 @@ function requiredStringArrayValue(values: Record<string, unknown>, key: string):
   return value;
 }
 
+function optionalStringArrayValue(
+  values: Record<string, unknown>,
+  key: string,
+  fallback: string[],
+): string[] {
+  const value = values[key];
+  if (value === undefined) return fallback;
+  if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
+    throw new Error(`${key} must be an array of strings`);
+  }
+  return value;
+}
+
 function requiredNumberValue(values: Record<string, unknown>, key: string): number {
   const value = values[key];
   if (typeof value !== "number" || !Number.isFinite(value))
     throw new Error(`${key} must be a number`);
+  return value;
+}
+
+function optionalNumberValue(
+  values: Record<string, unknown>,
+  key: string,
+  fallback: number,
+): number {
+  const value = values[key];
+  if (value === undefined) return fallback;
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(`${key} must be a number`);
+  }
   return value;
 }
 
@@ -271,6 +428,36 @@ require_clean_worktree = ${config.requireCleanWorktree}
 clean_worktree_except = [${config.cleanWorktreeExcept.map((item) => `"${escapeTomlString(item)}"`).join(", ")}]
 require_gate_before_ci = ${config.requireGateBeforeCi}
 require_ci_before_merge = ${config.requireCiBeforeMerge}
+
+[export]
+default_out = "${escapeTomlString(config.exportDefaultOut)}"
+canonicalize_command = "${escapeTomlString(config.exportCanonicalizeCommand)}"
+
+[hooks]
+pre_claim = "${escapeTomlString(config.hooks.preClaim)}"
+post_claim = "${escapeTomlString(config.hooks.postClaim)}"
+pre_check = "${escapeTomlString(config.hooks.preCheck)}"
+post_check = "${escapeTomlString(config.hooks.postCheck)}"
+pre_gate = "${escapeTomlString(config.hooks.preGate)}"
+post_export = "${escapeTomlString(config.hooks.postExport)}"
+pre_merge = "${escapeTomlString(config.hooks.preMerge)}"
+post_merge = "${escapeTomlString(config.hooks.postMerge)}"
+
+[check]
+timeout_seconds = ${config.checkTimeoutSeconds}
+no_output_timeout_seconds = ${config.checkNoOutputTimeoutSeconds}
+
+[ci]
+timeout_seconds = ${config.ciTimeoutSeconds}
+no_output_timeout_seconds = ${config.ciNoOutputTimeoutSeconds}
+
+[secrets]
+forbidden_path_globs = [${config.forbiddenPathGlobs.map((item) => `"${escapeTomlString(item)}"`).join(", ")}]
+masked_env = [${config.maskedEnv.map((item) => `"${escapeTomlString(item)}"`).join(", ")}]
+
+[waves]
+broad_audit_every = ${config.broadAuditEvery}
+deep_audit_every = ${config.deepAuditEvery}
 `;
 }
 

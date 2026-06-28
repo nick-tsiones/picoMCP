@@ -8,16 +8,17 @@ The portable, committed source of truth is the qd JSON export:
 qd export --out roadmap/spec-dag.json
 ```
 
-That export has `schema_version`, `exported_at`, `registries`, `nodes`, `edges`, `findings`, `runs`, and `node_notes`. A fresh clone can rebuild its local DB cache with:
+That export has `schema_version`, `exported_at`, `registries`, `nodes`, `edges`, `findings`, `runs`, `node_notes`, `assignments`, `waves`, and `wave_memberships`. A fresh clone can rebuild its local DB cache with:
 
 ```sh
 qd setup --no-hooks
 qd import --from roadmap/spec-dag.json
+qd sync --from roadmap/spec-dag.json
 ```
 
 ## Nodes
 
-Nodes are executable specs. They include title, kind, typed milestone, group, projects, status, priority, estimate, risk, branch, spec, acceptance, validation text, typed verification entries, audit focus guidance, context, status reason, per-node check/CI overrides, and timestamps.
+Nodes are executable specs. They include title, kind, typed milestone, group, projects, status, priority, estimate, risk, branch, spec, acceptance, validation text, typed verification entries, audit focus guidance, context, status reason, manual/external/policy blocker metadata, per-node check/CI overrides, and timestamps.
 
 If groups, projects, or milestones have been registered, qd validates node values against those registries. This lets a project define strict scheduling lanes, product areas, and milestone ranks without hard-coding one universal taxonomy.
 
@@ -64,13 +65,32 @@ Bulk mint plan for `qd nodes add-bulk --from-json <file>`:
 }
 ```
 
+Bulk minting is transactional. qd validates the full plan, auto-registers referenced groups, projects, and milestones, and writes the nodes and edges as one batch.
+
+Manual or external blockers are represented on the node:
+
+```json
+{
+  "id": "fixture-review",
+  "title": "Review fixture provenance",
+  "status": "blocked",
+  "blockedBy": "manual",
+  "blockedReason": "Fixture provenance review has not been signed off.",
+  "blockedOwner": "trevor",
+  "spec": "Wait for the review outcome before dispatching implementation.",
+  "acceptance": "The provenance review is signed off and recorded."
+}
+```
+
+Blocked nodes are excluded from `qd ready`. Use dependency edges for technical ordering, findings for audit issues, and blocker metadata for manual, external, or policy state.
+
 ## Edges
 
 Edges connect nodes. Only `requires` edges participate in readiness.
 
 ## Runs
 
-Runs record implementation, audit, resolve, CI, and merge lifecycle events.
+Runs record implementation, audit, resolve, check, verification, CI, and merge lifecycle events.
 
 `qd check run <node>` runs the configured `check_command` or the node's `check_command` override, writes a log under `.qd/logs/`, and records a check run. A passed check does not make the node mergeable.
 
@@ -79,6 +99,38 @@ Runs record implementation, audit, resolve, CI, and merge lifecycle events.
 `qd ci poll <node>` uses a configured provider adapter to wait for hosted CI and record the same pass/fail result. The first adapter is GitHub through `gh`; unsupported providers should be added as adapters rather than encoded into node schema.
 
 `qd merge <node>` records qd state only. It does not run `git merge`, open a pull request, squash commits, or push anything. Repositories should perform the actual git/GitHub merge through their normal workflow and use `qd merge` to record that the node satisfied qd's gate. Use `--use-existing-commit <sha>` when qd should record the commit produced by an external merge.
+
+## Assignments
+
+Assignments record opaque external ownership. qd does not parse agent identities and does not launch workers. Use assignments to record who owns implementation, audit, repair, review, planning, or exploration work, plus branch/worktree/scope, produced commits, evidence, and completion summary.
+
+```json
+{
+  "nodeId": "first-feature",
+  "role": "worker",
+  "owner": "external:worker-1",
+  "branch": "worker/first-feature",
+  "worktreePath": "/scratch/worktrees/repo-worker-first-feature",
+  "scope": "owned files or module"
+}
+```
+
+Open assignments cannot reuse the same branch or worktree path. Complete, fail, or cancel stale assignments before reusing those resources.
+
+## Waves
+
+Waves group nodes and assignments into orchestration batches. qd records wave state; it does not dispatch agents.
+
+```json
+{
+  "kind": "implementation",
+  "summary": "alpha cleanup wave",
+  "nodes": ["first-feature"],
+  "assignments": ["assignment-id"]
+}
+```
+
+Use waves to make broad/deep audit cadence auditable through qd state instead of chat memory.
 
 ## Findings
 
@@ -139,6 +191,12 @@ Minimal audit report:
 - `blocked`: blocked by failed check/CI or unresolved project state.
 - `cancelled`: intentionally abandoned.
 
+### BlockerType
+
+- `manual`: a person or orchestrator must sign off before the node can proceed.
+- `external`: waiting on an outside system, upstream change, vendor, credential, fixture, or environment.
+- `policy`: blocked by a project rule, release rule, compliance rule, or owner decision.
+
 ### Priority
 
 - `P0`: critical issue such as security, data loss, build break, or severe wrong behavior.
@@ -181,5 +239,35 @@ Only `requires` participates in ready-queue and cycle validation.
 - `audit`: audit/review work.
 - `resolve`: P0/P1 finding resolution work.
 - `check`: fast preflight command run.
+- `verification`: targeted verification evidence.
 - `ci`: full trusted gate run.
 - `merge`: qd merge-state record.
+
+### AssignmentRole
+
+- `planner`
+- `worker`
+- `auditor`
+- `repair`
+- `reviewer`
+- `explorer`
+
+### AssignmentStatus
+
+- `open`
+- `complete`
+- `failed`
+- `cancelled`
+
+### WaveKind
+
+- `implementation`
+- `audit`
+- `repair`
+- `planning`
+
+### WaveStatus
+
+- `open`
+- `complete`
+- `cancelled`

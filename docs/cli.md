@@ -11,19 +11,25 @@ If neither is set, qd uses the nearest ancestor `.qd/` directory. If no ancestor
 
 - `qd init`
 - `qd setup`
-- `qd doctor [--json]`
+- `qd doctor [--strict] [--json]`
 - `qd status [--json]`
 - `qd stats [--json] [--window 7] [--milestone <name>]`
 - `qd snapshot [--json] [--milestone <name>]`
-- `qd ready [--json]`
+- `qd ready [--json] [--fields id,title,priority,status] [--limit 50] [--compact|--tsv]`
 - `qd graph --format table|json|mermaid|dot`
 - `qd validate [--json]`
-- `qd export [--out <json>]`
-- `qd import --from <json> [--schema-mapping <json>] [--adapter roadmap-html|markdown-checklist] [--dry-run] [--verbose] [--allow-defaults]`
+- `qd export [--out <json>] [--deterministic] [--status ready,claimed] [--milestone <name>]`
+- `qd export --fields id,title,priority,status [--json|--tsv|--compact]`
+- `qd import --from <json> [--schema-mapping <json>] [--adapter roadmap-html|markdown-checklist] [--dry-run] [--verbose] [--allow-defaults] [--merge]`
+- `qd sync --from <qd-export.json>`
 - `qd velocity [--window 7]`
 - `qd critical-path [--milestone <name>]`
 - `qd eta [--window 7] [--milestone <name>]`
-- `qd milestone status [--milestone <name>]`
+- `qd milestone status <name>`
+- `qd milestone remaining <name> [--json] [--fields id,title,status]`
+- `qd milestone blockers <name> [--json]`
+- `qd milestone critical-path <name> [--json]`
+- `qd milestone next <name> [--limit 10] [--json]`
 - `qd config show [--json]`
 - `qd config get <key>`
 - `qd config set check-command --value <command>`
@@ -49,11 +55,14 @@ Use `qd export` for qd-native shared state:
 ```sh
 qd export --out roadmap/spec-dag.json
 qd import --from roadmap/spec-dag.json
+qd sync --from roadmap/spec-dag.json
 ```
 
 The exported JSON is the committed source of truth for sharing qd state across machines. `.qd/qd.db` remains a local rebuildable cache and should stay gitignored.
 
 qd-native exports include registries, nodes, edges, findings, runs, and node notes. They import without a mapping file.
+
+Use `qd export --deterministic --out roadmap/spec-dag.json` when the export is meant for a committed roadmap file and you want stable registry/export timestamps. Use `qd sync --from <qd-export.json>` to replace the local cache from a canonical qd export. `qd import --merge` is the equivalent explicit replace path for imports; plain `qd import` remains empty-DAG-only to prevent accidental mutation of an active graph.
 
 Use `qd import` for existing DAGs:
 
@@ -63,7 +72,7 @@ qd import --from roadmap/spec-dag.json --schema-mapping roadmap/qd-import-map.js
 qd import --from roadmap/spec-dag.json --schema-mapping roadmap/qd-import-map.json
 ```
 
-The import path is strict: unknown statuses require `statusMap`, malformed arrays fail, required fields must resolve, dependency arrays can create edges, and qd checks duplicate ids, missing edge endpoints, and `requires` cycles before writing. Non-dry-run imports fail if mapped nodes need defaulted fields unless `--allow-defaults` is passed intentionally.
+The import path is strict and transactional: unknown statuses require `statusMap`, malformed arrays fail, required fields must resolve, dependency arrays can create edges, and qd checks duplicate ids, missing edge endpoints, and `requires` cycles before writing. Bulk imports and bulk mints auto-register referenced groups, projects, and milestones so later validation is consistent. Non-dry-run imports fail if mapped nodes need defaulted fields unless `--allow-defaults` is passed intentionally.
 
 Reference adapters normalize common roadmap formats into qd's canonical import JSON:
 
@@ -88,11 +97,17 @@ See [Importing An Existing DAG](./import.md) for the full `ImportMapping` schema
 - `qd node add ... --group <name> --project <name> --project <name>`
 - `qd node add ... --milestone <name> --verify type=command,value="just ci" --audit-focus <text>`
 - `qd node list`
+- `qd node list --milestone alpha --status ready,claimed --fields priority,status,id,title`
+- `qd node list --project web --priority P0,P1 --status ready --json`
 - `qd node show <id>`
 - `qd node show <id> --full`
 - `qd node show <id> --include findings,notes,audits,runs`
 - `qd node edit <id> [--title] [--spec] [--acceptance]`
+- `qd node edit <id> --from-json <patch.json>`
+- `qd node edit <id> --spec-file <path> --acceptance-file <path>`
 - `qd node edit <id> --branch <branch>`
+- `qd node edit <id> --blocked-by manual|external|policy --blocked-reason <text> [--blocked-owner <name>]`
+- `qd node edit <id> --clear-blocker`
 - `qd node note <id> --text <text>`
 - `qd node note <id> --mode list`
 - `qd note add <id> --text <text>`
@@ -100,6 +115,16 @@ See [Importing An Existing DAG](./import.md) for the full `ImportMapping` schema
 - `qd edge add <from> <to> [--type requires]`
 - `qd claim [node] --agent <name> [--branch <branch>]`
 - `qd complete <node> --summary <text>`
+- `qd assignment add <node> --role worker --owner external:<id> [--branch <branch>] [--worktree <path>] [--scope <text>]`
+- `qd assignment add --from-json <assignment.json>`
+- `qd assignment complete <assignment> --summary <text> [--commit <sha>] [--evidence <path>]`
+- `qd assignment complete <assignment> --from-json <result.json>`
+- `qd assignment list [--node <node>] [--status open|complete|failed|cancelled]`
+- `qd wave start --kind implementation --summary <text>`
+- `qd wave add-node <wave> <node>`
+- `qd wave add-assignment <wave> <assignment>`
+- `qd wave complete <wave> --summary <text>`
+- `qd wave status [--json]`
 
 Use JSON or file-backed node creation when generated specs contain shell-sensitive text:
 
@@ -110,6 +135,17 @@ qd node add --title "Audit cleanup" --spec-file /tmp/spec.md --acceptance-file /
 ```
 
 Bulk mint plans may be either a node array or an object with `nodes[]` and optional `edges[]`. Node JSON is strict and uses the same typed fields as qd nodes: malformed strings, arrays, enums, or verification entries fail instead of being silently dropped.
+
+`qd nodes add-bulk` is all-or-nothing. qd validates every node and edge, registers referenced metadata for the batch, then writes in one transaction. If any node or edge is invalid, no partial DAG is left behind.
+
+Use blocker fields for project state outside dependency edges:
+
+```sh
+qd node edit xp3-fixture --blocked-by manual --blocked-reason "Fixture provenance review pending" --blocked-owner trevor
+qd node edit xp3-fixture --clear-blocker --status ready
+```
+
+Blocked nodes are excluded from `qd ready` by default even when all dependencies are complete. `blocked_by` is for manual, external, or policy blockers. It is not a replacement for dependency edges, audit findings, or failed CI runs.
 
 ## Workspace
 
@@ -147,13 +183,24 @@ qd workspace status --repo /path/to/repo-a --repo /path/to/repo-b --json
 - `qd finding add [node] --from-report <audit-report.json>`
 - `qd finding list [--open] [--severity P0,P1] [--node <id>]`
 - `qd finding resolve <finding>`
+- `qd finding dispose <finding> --disposition resolved|follow-up-node|promoted|dismissed|accepted-risk --rationale <text>`
+- `qd finding promote <finding> [--title <text>] [--acceptance <text>] [--verification type=command,value="<cmd>"]`
 - `qd promote-findings <node>`
 - `qd gate <node>`
 - `qd check run <node>`
 - `qd ci run <node>`
 - `qd ci poll <node> [--sha <commit>]`
 - `qd audit pass <node> --from-report <audit-report.json>`
+- `qd audit fail <node> --from-report <audit-report.json>`
+- `qd audit cancel <node> --run-id <run> --rationale <text>`
+- `qd audit supersede <node> --run-id <run> --rationale <text>`
+- `qd audit validate <audit-report.json>`
 - `qd verification sign-off <node> --type manual --note <text> [--evidence <path>]`
+- `qd verification run <node> [--only <command>]`
+- `qd verification record --from-json <verification-report.json>`
+- `qd verification validate <verification-report.json>`
+- `qd schema list`
+- `qd schema print audit-report|finding-import|assignment|verification|external-ci|wave`
 
 `qd promote-findings` prints `{ "promoted": [...] }` with the source finding id and new node id. It refuses while P0/P1 findings are open and includes the blocking finding ids and titles in the error.
 

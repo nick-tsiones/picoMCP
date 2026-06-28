@@ -33,7 +33,7 @@ nix develop -c just release-check
 
 `just npm-smoke` packs the actual core and CLI tarballs, installs them into a temporary npm prefix, and runs the installed `qd` binary through setup, doctor, JSON node creation, finding list, and export.
 
-`just mutation` runs Stryker against `packages/core/src/**/*.ts` with Vitest and the TypeScript checker. The current release ratchet is `thresholds.break = 55`, and it should only rise after tests kill enough mutants to earn the higher threshold.
+`just mutation` runs Stryker against qd's core state-machine modules: `graph.ts`, `db.ts`, and `workspace.ts`. The current release ratchet is `thresholds.break = 70`. String-literal and regex mutants are excluded because qd's parser-heavy import/config code creates low-signal churn there; state-machine, conditional, arithmetic, object, array, and method mutants remain in scope.
 
 ## Changesets Release Flow
 

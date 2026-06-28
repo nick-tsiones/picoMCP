@@ -1,5 +1,24 @@
 # @cat-cave/qdcli-core
 
+## 0.1.12
+
+### Patch Changes
+
+- Add agent-agnostic orchestration state for assignments and waves, audit run lifecycle helpers, richer gate/readiness output, milestone query commands, typed notes, schema validation commands, verification evidence recording, timeout-aware local run evidence, and tighter state-machine mutation coverage.
+
+## 0.1.11
+
+### Patch Changes
+
+- Harden DAG maintenance and migration workflows.
+
+  - Fix partial `qd node edit` updates and add JSON/file-backed edit inputs.
+  - Add first-class manual/external/policy blocker metadata and keep blocked nodes out of `qd ready`.
+  - Make `qd nodes add-bulk` transactional and auto-register imported metadata for consistent validation.
+  - Add deterministic exports and explicit canonical-export sync/replace workflows.
+  - Improve roadmap HTML import scoping, status detection, and dependency extraction.
+  - Add advisory `qd doctor` behavior with `qd doctor --strict` enforcement.
+
 ## 0.1.10
 
 ### Patch Changes

@@ -102,6 +102,18 @@ describe("workspace roll-up", () => {
     expect(status.repos[1]?.errors[0]).toMatch(/Missing qd database/);
   });
 
+  it("fails loudly when the workspace config file is missing", async () => {
+    await expect(
+      workspaceStatus({ configPath: path.join(root, "missing-workspaces.toml") }),
+    ).rejects.toThrow(/Workspace config not found/);
+  });
+
+  it("rejects workspace configs with no repos assignment", async () => {
+    await writeFile(configPath, "projects = []\n", "utf8");
+
+    await expect(workspaceStatus({ configPath })).rejects.toThrow(/expected repos/);
+  });
+
   it("rejects duplicate workspace repos", async () => {
     await writeFile(configPath, `repos = ["${repoA}", "${repoA}"]\n`, "utf8");
 

@@ -15,9 +15,25 @@ export type NodeStatus =
 export type Priority = "P0" | "P1" | "P2" | "P3";
 export type Risk = "low" | "medium" | "high";
 export type EdgeType = "requires" | "unblocks" | "supersedes" | "related";
-export type RunKind = "implement" | "audit" | "resolve" | "check" | "ci" | "merge";
+export type RunKind = "implement" | "audit" | "resolve" | "check" | "ci" | "verification" | "merge";
 export type FindingStatus = "open" | "resolved" | "promoted" | "dismissed";
 export type VerificationType = "command" | "manual" | "url" | "note";
+export type BlockerType = "manual" | "external" | "policy";
+export type AssignmentRole = "planner" | "worker" | "auditor" | "repair" | "reviewer" | "explorer";
+export type AssignmentStatus = "open" | "complete" | "failed" | "cancelled";
+export type WaveKind = "implementation" | "audit" | "repair" | "planning" | "release";
+export type WaveStatus = "open" | "complete" | "cancelled";
+export type NoteKind =
+  | "note"
+  | "blocker"
+  | "retry"
+  | "external-dependency"
+  | "operator-instruction"
+  | "audit-disposition"
+  | "live-run-attempt"
+  | "environment-preflight"
+  | "risk-acceptance"
+  | "migration-note";
 
 export interface VerificationEntry {
   type: VerificationType;
@@ -46,6 +62,9 @@ export interface QdNode {
   status_reason: string | null;
   check_command: string | null;
   ci_command: string | null;
+  blocked_by: BlockerType | null;
+  blocked_reason: string | null;
+  blocked_owner: string | null;
   created_at: string;
   updated_at: string;
   claimed_at: string | null;
@@ -55,7 +74,9 @@ export interface QdNode {
 export interface NodeNote {
   id: string;
   node_id: string;
+  kind: NoteKind;
   text: string;
+  evidence: string | null;
   created_at: string;
 }
 
@@ -77,6 +98,16 @@ export interface QdRun {
   node_id: string;
   kind: RunKind;
   status: string;
+  command: string | null;
+  provider: string | null;
+  exit_code: number | null;
+  git_sha: string | null;
+  external_id: string | null;
+  url: string | null;
+  rationale: string | null;
+  superseded_by: string | null;
+  report_path: string | null;
+  audit_kind: string | null;
   worktree_path: string | null;
   agent: string | null;
   started_at: string;
@@ -101,6 +132,38 @@ export interface QdFinding {
   resolved_at: string | null;
 }
 
+export interface QdAssignment {
+  id: string;
+  node_id: string;
+  role: AssignmentRole;
+  owner: string;
+  branch: string | null;
+  worktree_path: string | null;
+  scope: string | null;
+  status: AssignmentStatus;
+  commits_json: string;
+  evidence_json: string;
+  summary: string | null;
+  started_at: string;
+  finished_at: string | null;
+}
+
+export interface QdWave {
+  id: string;
+  kind: WaveKind;
+  status: WaveStatus;
+  summary: string;
+  started_at: string;
+  finished_at: string | null;
+}
+
+export interface QdWaveMembership {
+  wave_id: string;
+  node_id: string | null;
+  assignment_id: string | null;
+  created_at: string;
+}
+
 export interface PromotedFinding {
   findingId: string;
   newNodeId: string;
@@ -120,6 +183,9 @@ export interface GraphSnapshot {
   findings: QdFinding[];
   runs: QdRun[];
   node_notes: NodeNote[];
+  assignments: QdAssignment[];
+  waves: QdWave[];
+  wave_memberships: QdWaveMembership[];
 }
 
 export interface VelocityReport {

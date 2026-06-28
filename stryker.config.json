@@ -11,18 +11,21 @@
   "typescriptChecker": {
     "prioritizePerformanceOverAccuracy": false
   },
+  "mutator": {
+    "excludedMutations": ["StringLiteral", "Regex"]
+  },
   "tsconfigFile": "tsconfig.json",
   "mutate": [
-    "packages/core/src/**/*.ts",
-    "!packages/core/src/**/*.test.ts",
-    "!packages/core/src/index.ts"
+    "packages/core/src/graph.ts",
+    "packages/core/src/db.ts",
+    "packages/core/src/workspace.ts"
   ],
   "reporters": ["clear-text", "progress", "html"],
   "coverageAnalysis": "perTest",
   "thresholds": {
-    "high": 70,
-    "low": 60,
-    "break": 55
+    "high": 80,
+    "low": 70,
+    "break": 70
   },
   "concurrency": "50%",
   "timeoutMS": 10000
