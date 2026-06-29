@@ -172,16 +172,15 @@ export async function auditCommand(
   if (action === "pass") {
     const id = requiredArg(nodeId, "node id");
     const auditRun = await selectedAuditRun(root, id, options);
-    const imported = await importFindingsFromReport(
-      root,
-      required(options["from-report"], "--from-report"),
-      id,
-      { allowEmpty: true },
-    );
+    const reportPath = required(options["from-report"], "--from-report");
+    const report = await readJson(root, reportPath);
+    const validation = validateAuditReport(report);
+    rejectCleanAuditWithMissingRealWorldValidation(report, validation.realWorldValidation);
+    const imported = await importFindingsFromReport(root, reportPath, id, { allowEmpty: true });
     await finishRun(root, auditRun.id, {
       status: "passed",
-      summary: `Audit passed from ${required(options["from-report"], "--from-report")}`,
-      reportPath: required(options["from-report"], "--from-report"),
+      summary: `Audit passed from ${reportPath}`,
+      reportPath,
     });
     const gate = await gateNode(root, id);
     if (!gate.ok) {
@@ -209,18 +208,13 @@ export async function auditCommand(
   if (action === "fail") {
     const id = requiredArg(nodeId, "node id");
     const auditRun = await selectedAuditRun(root, id, options);
-    const imported = await importFindingsFromReport(
-      root,
-      required(options["from-report"], "--from-report"),
-      id,
-      { allowEmpty: true },
-    );
+    const reportPath = required(options["from-report"], "--from-report");
+    validateAuditReport(await readJson(root, reportPath));
+    const imported = await importFindingsFromReport(root, reportPath, id, { allowEmpty: true });
     const finished = await finishRun(root, auditRun.id, {
       status: "failed",
-      summary:
-        stringOpt(options.summary) ??
-        `Audit failed from ${required(options["from-report"], "--from-report")}`,
-      reportPath: required(options["from-report"], "--from-report"),
+      summary: stringOpt(options.summary) ?? `Audit failed from ${reportPath}`,
+      reportPath,
     });
     return output({ ok: false, nodeId: id, run: finished, imported }, json);
   }
@@ -296,6 +290,22 @@ export function auditTerminalStatus(
   return action === "supersede" ? "superseded" : "cancelled";
 }
 
+export function rejectCleanAuditWithMissingRealWorldValidation(
+  report: unknown,
+  realWorldStatus: "passed" | "not_required" | "failed" | "blocked",
+): void {
+  if (realWorldStatus === "passed" || realWorldStatus === "not_required") return;
+  const hasBlockingFinding = arrayAtPath(report, "findings").some((item) => {
+    const severity = stringAt(item, "severity");
+    return severity === "P0" || severity === "P1";
+  });
+  if (!hasBlockingFinding) {
+    throw new Error(
+      "Audit report says required real-world validation failed or is blocked, but it has no P0/P1 finding. Environment, credential, provider, URL, schema, and data-access failures are blockers, not clean audits.",
+    );
+  }
+}
+
 export async function selectedAuditRun(
   root: string,
   nodeId: string,
@@ -345,6 +355,8 @@ export async function importFindingsFromReport(
     if (!title) throw new Error(`findings[${index}].title is required`);
     const evidence = stringAt(raw, "evidence") ?? stringAt(raw, "body");
     if (!evidence) throw new Error(`findings[${index}].evidence is required`);
+    const expected = stringAt(raw, "expected");
+    if (!expected) throw new Error(`findings[${index}].expected is required`);
     imported.push(
       await addFinding(root, nodeId, {
         severity,
@@ -352,7 +364,7 @@ export async function importFindingsFromReport(
         evidence,
         path: stringAt(raw, "path"),
         line: numberAt(raw, "line") ?? null,
-        expected: stringAt(raw, "expected"),
+        expected,
         suggestedFix: stringAt(raw, "suggested_fix") ?? stringAt(raw, "suggestedFix"),
       }),
     );

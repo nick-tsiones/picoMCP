@@ -49,7 +49,10 @@ describe("graph node state and bulk writes", () => {
       acceptance: "A works",
     });
 
-    const completed = await completeNode(root, "a", "implemented the spec");
+    const completed = await completeNode(root, "a", {
+      summary: "implemented the spec",
+      reportPath: "reports/a-completion.json",
+    });
     const run = await latestRun(root, "a", "implement");
 
     expect(completed.status).toBe("review");
@@ -58,6 +61,7 @@ describe("graph node state and bulk writes", () => {
       kind: "implement",
       status: "completed",
       summary: "implemented the spec",
+      report_path: "reports/a-completion.json",
     });
   });
 
@@ -78,7 +82,8 @@ describe("graph node state and bulk writes", () => {
       summary: "verified by passed check",
     });
 
-    expect(unblocked.status).toBe("review");
+    expect(unblocked.status).toBe("ready");
+    expect(unblocked.blocked_by).toBeNull();
     expect((await listNodeNotes(root, "a", { kinds: ["retry"] }))[0]?.evidence).toContain(run?.id);
   });
 

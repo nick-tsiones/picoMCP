@@ -35,9 +35,9 @@ If neither is set, qd uses the nearest ancestor `.qd/` directory. If no ancestor
 - `qd config get <key>`
 - `qd config set check-command <command>`
 - `qd config set ci-command <command>`
-- `qd prompt plan|implement|audit|resolve [node] [--json]`
+- `qd prompt plan|research|implement|audit|resolve|reality-check|repo-audit|dag-review [node] [--json]`
 - `qd workspace status|ready|graph [--json] [--config <toml>] [--repo <path>]`
-- `qd advance <node> --summary <text> [--merge --use-existing-commit <sha>]`
+- `qd advance <node> --from-report <completion-report.json> [--merge --use-existing-commit <sha>]`
 - `qd diff <node> [--base main] [--self-only] [--working] [--tool git|sem|inspect] [--format markdown|json|plain]`
 
 Config read/write round trip:
@@ -104,7 +104,6 @@ See [Importing An Existing DAG](./import.md) for the full `ImportMapping` schema
 - `qd group register --name <name>`
 - `qd project register --name <name>`
 - `qd milestone register --name <name> --rank <number>`
-- `qd node add --title <text> --spec <text> --acceptance <text>`
 - `qd node add --from-json <node.json>`
 - `qd node add --title <text> --spec-file <path> --acceptance-file <path>`
 - `qd nodes add-bulk --from-json <plan.json>`
@@ -120,15 +119,17 @@ See [Importing An Existing DAG](./import.md) for the full `ImportMapping` schema
 - `qd node edit <id> --from-json <patch.json>`
 - `qd node edit <id> --spec-file <path> --acceptance-file <path>`
 - `qd node edit <id> --branch <branch>`
-- `qd node edit <id> --blocked-by manual|external|policy --blocked-reason <text> [--blocked-owner <name>]`
-- `qd node edit <id> --clear-blocker`
+- `qd block <id> --type environment|credential|provider|data|manual|policy|external-dependency --reason <text> --owner <name> --needed <text> --evidence <path-or-proof>`
+- `qd block <id> --from-report <blocker-report.json>`
+- `qd unblock <id> --summary <text> --evidence <path-or-proof>`
+- `qd unblock <id> --from-report <unblock-report.json>`
 - `qd node note <id> --text <text>`
 - `qd node note <id> --mode list`
 - `qd note add <id> --text <text>`
 - `qd note list <id>`
 - `qd edge add <from> <to> [--type requires]`
 - `qd claim [node] --agent <name> [--branch <branch>]`
-- `qd complete <node> --summary <text>`
+- `qd complete <node> --from-report <completion-report.json>`
 - `qd assignment add <node> --role worker --owner external:<id> [--branch <branch>] [--worktree <path>] [--scope <text>]`
 - `qd assignment add --from-json <assignment.json>`
 - `qd assignment complete <assignment> --summary <text> [--commit <sha>] [--evidence <path>]`
@@ -168,6 +169,38 @@ qd config set policy-require-merge-commit true
 
 These policies are generic. qd does not care whether the worker used a local worktree, remote host, CI job, or human review. It cares that the DAG state contains the evidence needed to safely advance the node.
 
+## Method And Reality
+
+qd has one intended roadmap model: research first, structured specs,
+evidence-backed completion, independent audits, typed blockers for real
+environment/provider/credential/data failures, trusted CI, and green main.
+
+Useful discovery commands:
+
+```sh
+qd help method
+qd help reality
+qd help specs
+qd help milestones
+qd help audits
+qd help blockers
+qd help evidence
+qd prompt research
+qd prompt reality-check
+qd prompt repo-audit
+qd prompt dag-review
+```
+
+Run `qd prompt research` before creating implementation nodes for external APIs,
+SDKs, databases, browsers, queues, deployment targets, credentials, or provider
+behavior. If research cannot verify the real surface, create research/blocker
+work instead of implementation work.
+
+Completion should carry evidence for each acceptance criterion. A summary-only
+completion is not an adequate proof of correctness. Audit reports should inspect
+diff, acceptance, and evidence. CI passing is required later, but CI is not the
+audit.
+
 Use JSON or file-backed node creation when generated specs contain shell-sensitive text:
 
 ```sh
@@ -180,14 +213,21 @@ Bulk mint plans may be either a node array or an object with `nodes[]` and optio
 
 `qd nodes add-bulk` is all-or-nothing. qd validates every node and edge, registers referenced metadata for the batch, then writes in one transaction. If any node or edge is invalid, no partial DAG is left behind.
 
-Use blocker fields for project state outside dependency edges:
+Use structured blockers for project state outside dependency edges:
 
 ```sh
-qd node edit xp3-fixture --blocked-by manual --blocked-reason "Fixture provenance review pending" --blocked-owner trevor
-qd node edit xp3-fixture --clear-blocker --status ready
+qd block xp3-fixture \
+  --type manual \
+  --reason "Fixture provenance review pending" \
+  --owner trevor \
+  --needed "Owner approves fixture provenance and redaction notes." \
+  --evidence reports/xp3-fixture-provenance-blocker.md
+qd unblock xp3-fixture \
+  --summary "Fixture provenance and redaction notes approved." \
+  --evidence reports/xp3-fixture-provenance-approved.md
 ```
 
-Blocked nodes are excluded from `qd ready` by default even when all dependencies are complete. `blocked_by` is for manual, external, or policy blockers. It is not a replacement for dependency edges, audit findings, or failed CI runs.
+Blocked nodes are excluded from `qd ready` by default even when all dependencies are complete. Blockers record reality that prevents honest progress, such as manual signoff, external dependency, policy no-go, environment failure, credential problem, provider outage, or missing data. They are not a replacement for dependency edges, audit findings, or failed CI runs. Unblocking requires evidence that the condition changed.
 
 `qd gate <node> --json` returns stable `explanations[]` reason codes for practical blockers:
 
@@ -277,7 +317,12 @@ Manual verification should be declared on the node with `--verify type=manual,va
 
 ## Advance And Diff
 
-`qd advance <node> --summary "..."` is a lifecycle shortcut for orchestrators. It records completion when needed, runs the P0/P1 gate, runs configured `check_command` and `ci_command` when present, and reports the step where it stopped. It does not perform a git or GitHub merge. `--merge` requires `--use-existing-commit <sha>` and should only be used after the real repository merge has been performed.
+`qd advance` is a lifecycle shortcut for orchestrators. It must record the same
+structured evidence as the explicit lifecycle commands. It runs the P0/P1 gate,
+runs configured `check_command` and `ci_command` when present, and reports the
+step where it stopped. It does not perform a git or GitHub merge. `--merge`
+requires `--use-existing-commit <sha>` and should only be used after the real
+repository merge has been performed.
 
 `qd diff <node> --self-only --base main` prints a diff from the node branch's merge-base with `main` to the node branch. This is useful when audit subagents need the branch's own change set without unrelated movement from an ahead main branch.
 
@@ -297,7 +342,6 @@ qd prompt audit <node> --diff-tool sem
 
 ## Lifecycle
 
-- `qd ci start <node> --cmd <command>`
 - `qd ci record-pass <node> --summary <text> (--log-path <path>|--url <url>|--external-id <id>)`
 - `qd ci fail <node>`
 - `qd ci poll <node> [--provider github] [--repo owner/name] [--workflow ci.yml] [--sha <commit>]`

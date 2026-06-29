@@ -37,6 +37,13 @@ describe("qd CLI config and lifecycle surfaces", () => {
     expect(await qd("help", "worktrees")).toContain("qd worktrees");
     expect(await qd("help", "diffs")).toContain("qd diffs");
     expect(await qd("help", "policies")).toContain("qd policies");
+    expect(await qd("help", "method")).toContain("one strict roadmap model");
+    expect(await qd("help", "reality")).toContain("never invent APIs");
+    expect(await qd("help", "specs")).toContain("Unknown integrations require research");
+    expect(await qd("help", "milestones")).toContain("externally meaningful capability phases");
+    expect(await qd("help", "audits")).toContain("CI is not an audit");
+    expect(await qd("help", "blockers")).toContain("structured escape hatches");
+    expect(await qd("help", "evidence")).toContain("artifacts");
 
     expect((await qdJson("init", "--json")).ok).toBe(true);
     expect(await qd("setup", "--print-agent-url")).toContain("docs/llms.md");
@@ -179,11 +186,42 @@ describe("qd CLI config and lifecycle surfaces", () => {
       "The node advances.",
     );
     await qd("claim", "advance-node", "--agent", "worker", "--branch", "spec/advance-node");
+    await writeFile(
+      path.join(root, "advance-completion-report.json"),
+      `${JSON.stringify({
+        nodeId: "advance-node",
+        summary: "Advance node implementation completed with evidence.",
+        changedFiles: ["src/advance-node.ts"],
+        acceptanceEvidence: [
+          {
+            criterion: "The node advances.",
+            status: "passed",
+            evidence: "reports/advance-node-acceptance.md",
+          },
+        ],
+        commandsRun: [
+          {
+            command: 'node -e "process.exit(0)"',
+            status: "passed",
+            evidence: "reports/advance-node-command.log",
+          },
+        ],
+        evidence: ["reports/advance-node-acceptance.md"],
+        realWorldValidation: {
+          required: false,
+          status: "not_required",
+          evidence: "No external service is required for this fixture node.",
+        },
+        unverifiedItems: [],
+        dagChangesNeeded: [],
+      })}\n`,
+      "utf8",
+    );
     const advanced = await qdJson(
       "advance",
       "advance-node",
-      "--summary",
-      "done",
+      "--from-report",
+      "advance-completion-report.json",
       "--skip-ci",
       "--json",
     );

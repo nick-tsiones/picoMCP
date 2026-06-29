@@ -72,7 +72,16 @@ describe("CLI contracts", () => {
     expect(FINDING_STATUSES).toEqual(["open", "resolved", "promoted", "dismissed"]);
     expect(VERIFICATION_TYPES).toEqual(["command", "manual", "url", "note"]);
     expect(MERGE_STRATEGIES).toEqual(["squash", "merge", "rebase"]);
-    expect(BLOCKER_TYPES).toEqual(["manual", "external", "policy"]);
+    expect(BLOCKER_TYPES).toEqual([
+      "manual",
+      "external",
+      "policy",
+      "environment",
+      "credential",
+      "provider",
+      "data",
+      "external-dependency",
+    ]);
     expect(RUN_KINDS).toEqual([
       "implement",
       "audit",

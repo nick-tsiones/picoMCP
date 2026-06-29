@@ -1,3 +1,5 @@
+import { evidenceFirstBlockerMigrationStatements } from "./schema-evidence-first.js";
+
 export const migrations = [
   {
     id: "001_initial",
@@ -355,5 +357,9 @@ export const migrations = [
       `create index if not exists idx_wave_memberships_node on wave_memberships(node_id)`,
       `pragma foreign_keys = on`,
     ],
+  },
+  {
+    id: "008_evidence_first_blockers",
+    statements: evidenceFirstBlockerMigrationStatements,
   },
 ] as const;

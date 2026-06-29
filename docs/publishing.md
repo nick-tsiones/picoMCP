@@ -35,6 +35,44 @@ nix develop -c just release-check
 
 `just mutation` runs Stryker across qd's core and CLI source, excluding tests, public barrel exports, and embedded prompt prose. The current release ratchet is `thresholds.break = 81`. String-literal and regex mutants are excluded because qd's parser-heavy import/config code creates low-signal churn there; state-machine, conditional, arithmetic, object, array, and method mutants remain in scope.
 
+## 0.2.0 Strict Method Release Checklist
+
+Before cutting the first strict-method release, validate both the general package
+surface and the agent-facing orchestration contract:
+
+```sh
+nix develop -c corepack pnpm exec vp check
+nix develop -c corepack pnpm exec vp test run --coverage
+nix develop -c corepack pnpm exec vitest run packages/cli/src/cli-strict-method.e2e.test.ts
+nix develop -c just npm-smoke
+nix develop -c just mutation
+nix build .#packages.x86_64-linux.qd
+nix develop -c corepack pnpm exec vp run pack
+```
+
+For the release itself, use the approved Changesets flow:
+
+```sh
+nix develop -c just changeset
+nix develop -c just release-version
+nix develop -c just release-check
+nix develop -c just release-tag
+nix develop -c just release-push
+```
+
+After the Trusted Publishing workflow completes, verify the public package:
+
+```sh
+npm view @cat-cave/qdcli version
+npx @cat-cave/qdcli@latest --version
+npx @cat-cave/qdcli@latest schema list --json
+```
+
+The strict-method E2E target must prove that weak agent paths fail: summary-only
+completion is rejected, clean audits without real-world validation are rejected,
+structured blocker/unblock flow works, prompts/help force the reality contract,
+and the public schemas expose the contracts agents must write.
+
 ## Changesets Release Flow
 
 qd uses Changesets for package versioning, changelog generation, internal workspace dependency updates, and publish selection. Do not edit package versions or changelog sections by hand for normal releases.

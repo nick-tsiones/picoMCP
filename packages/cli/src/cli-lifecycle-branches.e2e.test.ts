@@ -29,6 +29,42 @@ async function addLifecycleNode(id: string, extraArgs: string[] = []): Promise<v
   );
 }
 
+async function writeCompletionReport(id: string): Promise<string> {
+  const reportPath = path.join(root, `${id}-completion.json`);
+  await writeFile(
+    reportPath,
+    `${JSON.stringify({
+      nodeId: id,
+      summary: `${id} implementation is ready for audit.`,
+      changedFiles: [`src/${id}.ts`],
+      acceptanceEvidence: [
+        {
+          criterion: `${id} acceptance.`,
+          status: "passed",
+          evidence: `reports/${id}-acceptance.md`,
+        },
+      ],
+      commandsRun: [
+        {
+          command: 'node -e "process.exit(0)"',
+          status: "passed",
+          evidence: `logs/${id}-verification.log`,
+        },
+      ],
+      evidence: [`reports/${id}-completion.md`],
+      realWorldValidation: {
+        required: false,
+        status: "not_required",
+        evidence: "No external integration in this fixture.",
+      },
+      unverifiedItems: [],
+      dagChangesNeeded: [],
+    })}\n`,
+    "utf8",
+  );
+  return reportPath;
+}
+
 describe("qd CLI lifecycle branch behavior", () => {
   it("records and runs verification with explicit failure behavior", async () => {
     await qd("init");
@@ -102,7 +138,20 @@ describe("qd CLI lifecycle branch behavior", () => {
     await qd("config", "set", "require_clean_worktree", "false");
 
     await addLifecycleNode("empty-ci");
-    const emptyCi = await qdRaw(["advance", "empty-ci", "--summary", "done", "--json"]);
+    await expectQdFailure(
+      /qd complete requires --from-report/,
+      "complete",
+      "empty-ci",
+      "--summary",
+      "done",
+    );
+    const emptyCi = await qdRaw([
+      "advance",
+      "empty-ci",
+      "--from-report",
+      await writeCompletionReport("empty-ci"),
+      "--json",
+    ]);
     expect(emptyCi.exitCode).toBe(1);
     expect(emptyCi.stderr).toMatch(/ci_command is empty/);
 
@@ -121,8 +170,8 @@ describe("qd CLI lifecycle branch behavior", () => {
     const gateStop = await qdJsonAllowExit(
       "advance",
       "gate-stop",
-      "--summary",
-      "done",
+      "--from-report",
+      await writeCompletionReport("gate-stop"),
       "--skip-ci",
       "--json",
     );
@@ -134,8 +183,8 @@ describe("qd CLI lifecycle branch behavior", () => {
     const checkStop = await qdJsonAllowExit(
       "advance",
       "check-stop",
-      "--summary",
-      "done",
+      "--from-report",
+      await writeCompletionReport("check-stop"),
       "--skip-ci",
       "--json",
     );
@@ -148,8 +197,8 @@ describe("qd CLI lifecycle branch behavior", () => {
     const policyStop = await qdJsonAllowExit(
       "advance",
       "policy-stop",
-      "--summary",
-      "done",
+      "--from-report",
+      await writeCompletionReport("policy-stop"),
       "--json",
     );
     expect(policyStop.exitCode).toBe(1);
@@ -159,13 +208,25 @@ describe("qd CLI lifecycle branch behavior", () => {
     await qd("config", "set", "policy_require_verification_before_ci", "false");
     await qd("config", "set", "ci_command", 'node -e "process.exit(5)"');
     await addLifecycleNode("ci-stop");
-    const ciStop = await qdJsonAllowExit("advance", "ci-stop", "--summary", "done", "--json");
+    const ciStop = await qdJsonAllowExit(
+      "advance",
+      "ci-stop",
+      "--from-report",
+      await writeCompletionReport("ci-stop"),
+      "--json",
+    );
     expect(ciStop.exitCode).toBe(5);
     expect(ciStop.json).toMatchObject({ ok: false, stoppedAt: "ci" });
 
     await qd("config", "set", "ci_command", 'node -e "process.exit(0)"');
     await addLifecycleNode("merge-stop");
-    const mergeReady = await qdJson("advance", "merge-stop", "--summary", "done", "--json");
+    const mergeReady = await qdJson(
+      "advance",
+      "merge-stop",
+      "--from-report",
+      await writeCompletionReport("merge-stop"),
+      "--json",
+    );
     expect(mergeReady.nextAction).toMatch(/Perform the real git\/GitHub merge/);
     await expectQdFailure(/requires --use-existing-commit/, "advance", "merge-stop", "--merge");
     const merged = await qdJson(

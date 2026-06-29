@@ -107,7 +107,7 @@ interface ImportMapping {
   auditFocus?: string; // default: "auditFocus"; string or string[]
   context?: string; // default: "context"
   statusReason?: string; // default: "statusReason"
-  blockedBy?: string; // default: "blocked_by"; manual|external|policy
+  blockedBy?: string; // default: "blocked_by"; manual|external|policy|environment|credential|provider|data|external-dependency
   blockedReason?: string; // default: "blocked_reason"
   blockedOwner?: string; // default: "blocked_owner"
   statusMap?: Record<string, NodeStatus>;

@@ -47,6 +47,15 @@ export async function nodeInputFromOptions(
       "--from-json",
     );
   }
+  if (
+    hasOption(options, "blocked-by") ||
+    hasOption(options, "blocked-reason") ||
+    hasOption(options, "blocked-owner")
+  ) {
+    throw new Error(
+      "Use qd block after node creation for blocker state; node add is not an evidence path.",
+    );
+  }
   const spec = options["spec-file"]
     ? await readTextFile(root, required(options["spec-file"], "--spec-file"))
     : required(options.spec, "--spec");
@@ -83,12 +92,15 @@ export async function nodeUpdateFromOptions(
   root: string,
   options: Record<string, string | string[] | boolean>,
 ): Promise<Parameters<typeof updateNode>[2]> {
-  const fromJson = options["from-json"]
-    ? normalizeNodeUpdate(
-        await readJson(root, required(options["from-json"], "--from-json")),
-        "--from-json",
-      )
-    : {};
+  const rawFromJson = options["from-json"]
+    ? await readJson(root, required(options["from-json"], "--from-json"))
+    : null;
+  if (rawFromJson && nodePatchContainsBlockerFields(rawFromJson)) {
+    throw new Error(
+      "Use qd block or qd unblock for blocker state changes; node edit is not an evidence path.",
+    );
+  }
+  const fromJson = rawFromJson ? normalizeNodeUpdate(rawFromJson, "--from-json") : {};
   const spec = options["spec-file"]
     ? await readTextFile(root, required(options["spec-file"], "--spec-file"))
     : stringOpt(options.spec);
@@ -98,8 +110,15 @@ export async function nodeUpdateFromOptions(
   const blockedBy = strictEnumOpt(options["blocked-by"], isBlockerType, "--blocked-by");
   const status = strictEnumOpt(options.status, isNodeStatus, "--status");
   const clearBlocker = Boolean(options["clear-blocker"]);
-  if (blockedBy && !hasOption(options, "blocked-reason")) {
-    throw new Error("--blocked-reason is required when --blocked-by is set");
+  if (
+    blockedBy ||
+    clearBlocker ||
+    hasOption(options, "blocked-reason") ||
+    hasOption(options, "blocked-owner")
+  ) {
+    throw new Error(
+      "Use qd block or qd unblock for blocker state changes; node edit is not an evidence path.",
+    );
   }
   const cliUpdates = stripUndefinedValues({
     title: stringOpt(options.title),
@@ -136,6 +155,18 @@ export async function nodeUpdateFromOptions(
         : undefined,
   }) as Parameters<typeof updateNode>[2];
   return { ...fromJson, ...cliUpdates, ...blockerUpdates } as Parameters<typeof updateNode>[2];
+}
+
+function nodePatchContainsBlockerFields(raw: unknown): boolean {
+  if (!raw || typeof raw !== "object") return false;
+  return (
+    hasOption(raw as Record<string, unknown>, "blockedBy") ||
+    hasOption(raw as Record<string, unknown>, "blocked_by") ||
+    hasOption(raw as Record<string, unknown>, "blockedReason") ||
+    hasOption(raw as Record<string, unknown>, "blocked_reason") ||
+    hasOption(raw as Record<string, unknown>, "blockedOwner") ||
+    hasOption(raw as Record<string, unknown>, "blocked_owner")
+  );
 }
 
 export function normalizeNodeInput(raw: unknown, context: string): AddNodeInput {

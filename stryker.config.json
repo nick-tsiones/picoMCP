@@ -14,6 +14,7 @@
   "mutator": {
     "excludedMutations": ["StringLiteral", "Regex"]
   },
+  "ignorePatterns": ["/result", "/coverage", "/reports", "/dist", "/.stryker-tmp"],
   "tsconfigFile": "tsconfig.json",
   "mutate": [
     "packages/core/src/**/*.ts",

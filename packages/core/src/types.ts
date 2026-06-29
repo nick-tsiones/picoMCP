@@ -18,7 +18,15 @@ export type EdgeType = "requires" | "unblocks" | "supersedes" | "related";
 export type RunKind = "implement" | "audit" | "resolve" | "check" | "ci" | "verification" | "merge";
 export type FindingStatus = "open" | "resolved" | "promoted" | "dismissed";
 export type VerificationType = "command" | "manual" | "url" | "note";
-export type BlockerType = "manual" | "external" | "policy";
+export type BlockerType =
+  | "manual"
+  | "external"
+  | "policy"
+  | "environment"
+  | "credential"
+  | "provider"
+  | "data"
+  | "external-dependency";
 export type AssignmentRole = "planner" | "worker" | "auditor" | "repair" | "reviewer" | "explorer";
 export type AssignmentStatus = "open" | "complete" | "failed" | "cancelled";
 export type WaveKind = "implementation" | "audit" | "repair" | "planning" | "release";

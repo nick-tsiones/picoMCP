@@ -1,6 +1,17 @@
 import { all, get, run, type Database } from "./db.js";
 import type { AddNodeInput } from "./graph-types.js";
-import type { EdgeType, QdEdge, QdNode, VerificationEntry } from "./types.js";
+import type { BlockerType, EdgeType, QdEdge, QdNode, VerificationEntry } from "./types.js";
+
+export const BLOCKER_TYPES: readonly BlockerType[] = [
+  "manual",
+  "external",
+  "policy",
+  "environment",
+  "credential",
+  "provider",
+  "data",
+  "external-dependency",
+];
 
 export interface NodeRow extends Omit<QdNode, "projects" | "verification" | "audit_focus"> {
   projects_json: string;
@@ -161,13 +172,8 @@ export function assertNodeQuality(
   if (!Number.isInteger(node.estimate_points) || node.estimate_points < 1) {
     throw new Error("Node estimate_points must be a positive integer");
   }
-  if (
-    node.blocked_by !== null &&
-    node.blocked_by !== "manual" &&
-    node.blocked_by !== "external" &&
-    node.blocked_by !== "policy"
-  ) {
-    throw new Error("blocked_by must be manual, external, policy, or null");
+  if (node.blocked_by !== null && !BLOCKER_TYPES.includes(node.blocked_by)) {
+    throw new Error(`blocked_by must be ${BLOCKER_TYPES.join(", ")}, or null`);
   }
   if (node.blocked_reason !== null) assertStringField(node.blocked_reason, "blocked_reason");
   if (node.blocked_owner !== null) assertStringField(node.blocked_owner, "blocked_owner");

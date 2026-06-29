@@ -40,7 +40,16 @@ export const EDGE_TYPES = ["requires", "unblocks", "supersedes", "related"];
 export const FINDING_STATUSES = ["open", "resolved", "promoted", "dismissed"];
 export const VERIFICATION_TYPES = ["command", "manual", "url", "note"];
 export const MERGE_STRATEGIES = ["squash", "merge", "rebase"];
-export const BLOCKER_TYPES = ["manual", "external", "policy"];
+export const BLOCKER_TYPES = [
+  "manual",
+  "external",
+  "policy",
+  "environment",
+  "credential",
+  "provider",
+  "data",
+  "external-dependency",
+];
 export const RUN_KINDS = ["implement", "audit", "resolve", "check", "ci", "verification", "merge"];
 export const ASSIGNMENT_ROLES = ["planner", "worker", "auditor", "repair", "reviewer", "explorer"];
 export const ASSIGNMENT_STATUSES = ["open", "complete", "failed", "cancelled"];

@@ -1,7 +1,6 @@
 import { fileURLToPath } from "node:url";
 import {
   analyticsReport,
-  completeNode,
   criticalPathReport,
   etaReport,
   graphSnapshot,
@@ -16,7 +15,6 @@ import {
   resolveProjectRoot,
   setupProject,
   startRun,
-  unblockNode,
   velocityReport,
 } from "@cat-cave/qdcli-core";
 import {
@@ -65,6 +63,7 @@ import { worktreeCommand } from "./worktree.js";
 import { cliVersion, commandHelp, helpText, topicHelp } from "./help.js";
 import { ciCommand } from "./ci.js";
 import { advanceCommand, checkCommand, verificationCommand } from "./lifecycle.js";
+import { blockCommand, completeCommand, unblockCommand } from "./lifecycle-reports.js";
 import { assignmentCommand, waveCommand } from "./orchestration.js";
 import { auditCommand, findingCommand, gate } from "./audit.js";
 import {
@@ -195,14 +194,10 @@ export async function runCli(argv = process.argv.slice(2)): Promise<void> {
       return envCommand(action, args.options, json);
     case "schema":
       return schemaCommand(action, extra, json);
+    case "block":
+      return blockCommand(root, action, args.options, json);
     case "unblock":
-      return output(
-        await unblockNode(root, requiredArg(action, "node id"), {
-          fromRunId: required(args.options["from-run"], "--from-run"),
-          summary: required(args.options.summary, "--summary"),
-        }),
-        json,
-      );
+      return unblockCommand(root, action, args.options, json);
     case "merge-ready":
       return readinessCommand(root, action, "merge", json);
     case "completion-ready":
@@ -214,14 +209,7 @@ export async function runCli(argv = process.argv.slice(2)): Promise<void> {
     case "start":
       return output(await startRun(root, requiredArg(action, "node id"), "implement"), json);
     case "complete":
-      return output(
-        await completeNode(
-          root,
-          requiredArg(action, "node id"),
-          required(args.options.summary, "--summary"),
-        ),
-        json,
-      );
+      return completeCommand(root, action, args.options, json);
     case "audit":
       return auditCommand(root, action, extra, args.options, json);
     case "finding":

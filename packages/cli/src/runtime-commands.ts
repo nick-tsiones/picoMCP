@@ -20,8 +20,13 @@ import { canonicalSnapshotFrom } from "./object-utils.js";
 import {
   assignmentSchema,
   auditReportSchema,
+  blockerReportSchema,
+  completionReportSchema,
   externalCiSchema,
   findingImportSchema,
+  milestoneSchema,
+  specSchema,
+  unblockReportSchema,
   verificationSchema,
   waveSchema,
 } from "./schemas.js";
@@ -134,7 +139,33 @@ export function schemaCommand(
 ): void {
   const schemas = {
     "audit-report": auditReportSchema(),
+    blocker: blockerReportSchema(),
+    "blocker-report": blockerReportSchema(),
+    "completion-report": completionReportSchema(),
+    finding: findingImportSchema(),
     "finding-import": findingImportSchema(),
+    milestone: milestoneSchema(),
+    "reality-check": {
+      type: "object",
+      required: ["summary", "findings", "dagChangesNeeded"],
+      properties: {
+        summary: { type: "string" },
+        findings: { type: "array", items: findingImportSchema() },
+        dagChangesNeeded: { type: "array", items: { type: "string" } },
+      },
+    },
+    "research-report": {
+      type: "object",
+      required: ["sourcesInspected", "environmentVerified", "resultingNodes"],
+      properties: {
+        sourcesInspected: { type: "array", items: { type: "string" } },
+        environmentVerified: { type: "array", items: { type: "string" } },
+        unresolvedUnknowns: { type: "array", items: { type: "string" } },
+        resultingNodes: { type: "array", items: specSchema() },
+      },
+    },
+    spec: specSchema(),
+    "unblock-report": unblockReportSchema(),
     assignment: assignmentSchema(),
     verification: verificationSchema(),
     "external-ci": externalCiSchema(),

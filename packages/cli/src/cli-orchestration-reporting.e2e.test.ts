@@ -123,7 +123,27 @@ describe("qd CLI orchestration reporting surfaces", () => {
 
     await writeFile(
       path.join(root, "audit-report.json"),
-      `${JSON.stringify({ findings: [] })}\n`,
+      `${JSON.stringify({
+        nodeId: "feature",
+        acceptanceReviewed: [
+          {
+            criterion: "Feature work is done.",
+            status: "passed",
+            evidence: "reports/feature-acceptance.md",
+          },
+        ],
+        verificationEvidence: {
+          diffReviewed: true,
+          completionReportReviewed: true,
+          verificationEvidenceReviewed: true,
+        },
+        realWorldValidation: {
+          required: false,
+          status: "not_required",
+          evidence: "No external surface is required for this fixture node.",
+        },
+        findings: [],
+      })}\n`,
       "utf8",
     );
     expect((await qdJson("audit", "validate", "audit-report.json", "--json")).ok).toBe(true);
@@ -246,7 +266,13 @@ describe("qd CLI orchestration reporting surfaces", () => {
     expect((await qdJson("prompt", "audit", "feature", "--json")).auditDiffCommand).toContain(
       "qd diff",
     );
-    expect(await qd("prompt", "plan")).toContain("Build a qd DAG");
+    expect(await qd("prompt", "plan")).toContain("Perform product/integration research");
+    expect(await qd("prompt", "research")).toContain("Research before building");
+    expect(await qd("prompt", "reality-check")).toContain("Run a qd DAG reality check");
+    expect(await qd("prompt", "repo-audit")).toContain("Audit the whole codebase");
+    expect(await qd("prompt", "dag-review")).toContain("Review and revise the qd DAG");
+    expect(await qd("prompt", "implement", "feature")).toContain("Do not invent APIs");
+    expect(await qd("prompt", "audit", "feature")).toContain("CI is a separate gate");
     expect(await qd("prompt", "resolve", "feature")).toContain("Resolve only open P0/P1");
 
     await qd("export", "--deterministic", "--out", "roadmap/spec-dag.json");

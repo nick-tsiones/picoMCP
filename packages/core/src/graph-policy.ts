@@ -4,6 +4,7 @@ import { addNodeNote } from "./graph-notes.js";
 import { addNode, getNode, getRun, listFindings, listRuns } from "./graph-nodes.js";
 import { gateNode, latestRun } from "./graph-audit.js";
 import type {
+  BlockerType,
   PolicyPhase,
   PolicyReport,
   PolicyViolation,
@@ -12,6 +13,14 @@ import type {
   QdNode,
   VerificationEntry,
 } from "./types.js";
+
+export interface BlockNodeInput {
+  type: BlockerType;
+  reason: string;
+  owner: string;
+  needed: string;
+  evidence: string;
+}
 
 export async function policyReport(
   root: string,
@@ -227,6 +236,31 @@ export async function recordCheckResult(
   return getNode(root, nodeId);
 }
 
+export async function blockNode(
+  root: string,
+  nodeId: string,
+  input: BlockNodeInput,
+): Promise<QdNode> {
+  if (!input.reason.trim()) throw new Error("block reason is required");
+  if (!input.owner.trim()) throw new Error("block owner is required");
+  if (!input.needed.trim()) throw new Error("block needed action is required");
+  if (!input.evidence.trim()) throw new Error("block evidence is required");
+  const db = await openDatabase(root);
+  const now = new Date().toISOString();
+  await run(
+    db,
+    "update nodes set status = 'blocked', blocked_by = ?, blocked_reason = ?, blocked_owner = ?, updated_at = ? where id = ?",
+    [input.type, input.reason, input.owner, now, nodeId],
+  );
+  await addNodeNote(
+    root,
+    nodeId,
+    [`Blocked by ${input.type}: ${input.reason}`, `Needed: ${input.needed}`].join("\n"),
+    { kind: "blocker", evidence: input.evidence },
+  );
+  return getNode(root, nodeId);
+}
+
 export async function ciFail(root: string, nodeId: string, summary = "CI failed"): Promise<QdNode> {
   const db = await openDatabase(root);
   const current = await getNode(root, nodeId);
@@ -247,21 +281,33 @@ export async function ciFail(root: string, nodeId: string, summary = "CI failed"
 export async function unblockNode(
   root: string,
   nodeId: string,
-  input: { fromRunId: string; summary: string },
+  input: { fromRunId?: string | null; summary: string; evidence?: string | null },
 ): Promise<QdNode> {
   const node = await getNode(root, nodeId);
   if (node.status !== "blocked") throw new Error(`Cannot unblock node with status ${node.status}`);
-  const runRow = await getRun(root, input.fromRunId);
-  if (runRow.node_id !== nodeId) throw new Error(`Run ${runRow.id} does not belong to ${nodeId}`);
-  if (runRow.status !== "passed") throw new Error(`Run ${runRow.id} is not passed`);
+  if (!input.summary.trim()) throw new Error("unblock summary is required");
+  if (!input.fromRunId && !input.evidence?.trim()) {
+    throw new Error("unblock requires --from-run <passed-run> or --evidence <path-or-proof>");
+  }
+  let evidence = input.evidence ?? null;
+  if (input.fromRunId) {
+    const runRow = await getRun(root, input.fromRunId);
+    if (runRow.node_id !== nodeId) throw new Error(`Run ${runRow.id} does not belong to ${nodeId}`);
+    if (runRow.status !== "passed") throw new Error(`Run ${runRow.id} is not passed`);
+    evidence = evidence ?? `run:${input.fromRunId}`;
+  }
   const gate = await gateNode(root, nodeId, { ignoreNodeBlocker: true });
   if (!gate.ok) throw new Error("Cannot unblock while qd gate is blocked");
   const db = await openDatabase(root);
   const now = new Date().toISOString();
-  await run(db, "update nodes set status = 'review', updated_at = ? where id = ?", [now, nodeId]);
+  await run(
+    db,
+    "update nodes set status = 'ready', blocked_by = null, blocked_reason = null, blocked_owner = null, updated_at = ? where id = ?",
+    [now, nodeId],
+  );
   await addNodeNote(root, nodeId, input.summary, {
     kind: "retry",
-    evidence: `run:${input.fromRunId}`,
+    evidence,
   });
   return getNode(root, nodeId);
 }

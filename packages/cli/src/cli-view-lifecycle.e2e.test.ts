@@ -16,6 +16,42 @@ import {
 installCliFixture();
 
 describe("qd CLI viewer and public lifecycle surfaces", () => {
+  async function writeCompletionReport(id: string): Promise<string> {
+    const reportPath = path.join(root, `${id}-completion.json`);
+    await writeFile(
+      reportPath,
+      `${JSON.stringify({
+        nodeId: id,
+        summary: "Implementation completed.",
+        changedFiles: [`src/${id}.ts`],
+        acceptanceEvidence: [
+          {
+            criterion: "The fixture passes audit, verification, check, CI, and merge recording.",
+            status: "passed",
+            evidence: "reports/lifecycle-acceptance.md",
+          },
+        ],
+        commandsRun: [
+          {
+            command: "manual lifecycle fixture",
+            status: "passed",
+            evidence: "logs/lifecycle.log",
+          },
+        ],
+        evidence: ["reports/lifecycle-completion.md"],
+        realWorldValidation: {
+          required: false,
+          status: "not_required",
+          evidence: "No external integration in lifecycle fixture.",
+        },
+        unverifiedItems: [],
+        dagChangesNeeded: [],
+      })}\n`,
+      "utf8",
+    );
+    return reportPath;
+  }
+
   it("serves embedded viewer assets and live DAG endpoints through the viewer handler", async () => {
     await qd("setup", "--no-hooks");
     await qd(
@@ -139,7 +175,12 @@ describe("qd CLI viewer and public lifecycle surfaces", () => {
       "type=manual,value=owner sign-off",
     );
     await qd("claim", "lifecycle-node", "--agent", "worker", "--branch", "spec/lifecycle-node");
-    await qd("complete", "lifecycle-node", "--summary", "Implementation completed.");
+    await qd(
+      "complete",
+      "lifecycle-node",
+      "--from-report",
+      await writeCompletionReport("lifecycle-node"),
+    );
     const ciGateBeforeEvidence = await qdJsonAllowExit(
       "gate",
       "lifecycle-node",
@@ -155,7 +196,27 @@ describe("qd CLI viewer and public lifecycle surfaces", () => {
 
     await writeFile(
       path.join(root, "audit-report.json"),
-      `${JSON.stringify({ findings: [] })}\n`,
+      `${JSON.stringify({
+        nodeId: "lifecycle-node",
+        acceptanceReviewed: [
+          {
+            criterion: "The fixture passes audit, verification, check, CI, and merge recording.",
+            status: "passed",
+            evidence: "reports/lifecycle-acceptance.md",
+          },
+        ],
+        verificationEvidence: {
+          diffReviewed: true,
+          completionReportReviewed: true,
+          verificationEvidenceReviewed: true,
+        },
+        realWorldValidation: {
+          required: false,
+          status: "not_required",
+          evidence: "No external integration in lifecycle fixture.",
+        },
+        findings: [],
+      })}\n`,
       "utf8",
     );
     await qd("audit", "start", "lifecycle-node", "--kind", "acceptance");

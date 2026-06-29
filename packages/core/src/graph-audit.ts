@@ -84,14 +84,23 @@ export async function startRun(
   return runRow;
 }
 
-export async function completeNode(root: string, nodeId: string, summary: string): Promise<QdNode> {
+export interface CompletionReportInput {
+  summary: string;
+  reportPath: string;
+}
+
+export async function completeNode(
+  root: string,
+  nodeId: string,
+  report: CompletionReportInput,
+): Promise<QdNode> {
   const db = await openDatabase(root);
   const now = new Date().toISOString();
   await run(
     db,
-    `insert into runs (id, node_id, kind, status, started_at, finished_at, summary)
-    values (?, ?, 'implement', 'completed', ?, ?, ?)`,
-    [randomUUID(), nodeId, now, now, summary],
+    `insert into runs (id, node_id, kind, status, started_at, finished_at, summary, report_path)
+    values (?, ?, 'implement', 'completed', ?, ?, ?, ?)`,
+    [randomUUID(), nodeId, now, now, report.summary, report.reportPath],
   );
   await run(db, "update nodes set status = 'review', updated_at = ? where id = ?", [now, nodeId]);
   return getNode(root, nodeId);

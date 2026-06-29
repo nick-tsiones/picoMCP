@@ -24,6 +24,7 @@ export {
   startRun,
 } from "./graph-audit.js";
 export {
+  blockNode,
   ciFail,
   ciPass,
   markMerged,

@@ -4,6 +4,11 @@ qd is designed for one central orchestrator agent. The orchestrator manages the 
 
 qd is the authoritative DAG ledger and quality gate. It works best when the repo has one canonical command that means "green enough to merge", and when main is kept green after every merge.
 
+The qd method is mandatory for orchestrators. Read `docs/orchestration.md` or
+`qd help method` before planning or advancing work. qd expects research before
+roadmap, executable specs, evidence-backed completion, independent audits,
+typed blockers for environment/provider/credential/data failures, and green main.
+
 During setup, configure a fast preflight and the full green gate:
 
 ```sh
@@ -19,15 +24,21 @@ qd config set ci-command "<full project CI command>"
 4. The orchestrator selects ready nodes and delegates them.
 5. Each delegated node is claimed with `qd claim <node> --agent <name>`.
 6. Implementation subagents receive `qd prompt implement <node>` and project context.
-7. The orchestrator records completion with `qd complete`.
-8. Audit subagents review work; the orchestrator records structured findings with `qd audit pass <node> --from-report <file>` for clean audits or `qd audit fail <node> --from-report <file>` for failed audits.
-9. P0/P1 findings are resolved before CI or merge.
-10. P2/P3 findings are promoted into future nodes after the current node passes.
-11. Declared manual verification is signed off with `qd verification sign-off <node> --type manual --note "..." --evidence <path>`.
-12. The orchestrator runs `qd check run <node>` when a fast preflight is useful.
-13. The orchestrator runs `qd ci run <node>` or `qd ci poll <node>` rather than manually recording a pass when qd can observe the provider.
-14. The orchestrator performs the repo's actual git/GitHub merge through the normal workflow.
-15. The orchestrator records `qd merge <node> --use-existing-commit <sha>` only after qd marks the node mergeable.
-16. Shared qd state is exported with `qd export --deterministic --out roadmap/spec-dag.json`; another clone restores the local cache with `qd sync --from roadmap/spec-dag.json`.
+7. If implementation cannot validate required real-world behavior, the orchestrator blocks, splits, or revises the node instead of completing it.
+8. The orchestrator records completion only with evidence for the node's acceptance criteria.
+9. Audit subagents review diff, acceptance, and evidence; the orchestrator records structured findings with `qd audit pass <node> --from-report <file>` for clean audits or `qd audit fail <node> --from-report <file>` for failed audits.
+10. Missing required evidence, unreachable required APIs/providers/environments, or unverified acceptance is P1 unless the spec explicitly excludes that surface.
+11. P0/P1 findings are resolved before CI or merge.
+12. P2/P3 findings are promoted into future nodes after the current node passes.
+13. Declared manual verification is signed off with `qd verification sign-off <node> --type manual --note "..." --evidence <path>`.
+14. The orchestrator runs `qd check run <node>` when a fast preflight is useful.
+15. The orchestrator runs `qd ci run <node>` or `qd ci poll <node>` rather than manually recording a pass when qd can observe the provider.
+16. The orchestrator performs the repo's actual git/GitHub merge through the normal workflow.
+17. The orchestrator records `qd merge <node> --use-existing-commit <sha>` only after qd marks the node mergeable.
+18. Shared qd state is exported with `qd export --deterministic --out roadmap/spec-dag.json`; another clone restores the local cache with `qd sync --from roadmap/spec-dag.json`.
+
+After about 10 merged nodes, run a repo-wide audit and add every real finding to
+qd. After about 30 merged nodes, run a DAG reality review and revise milestones,
+dependencies, blockers, or specs that no longer match reality.
 
 Never work a blocked node unless the user explicitly changes the DAG.

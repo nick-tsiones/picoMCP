@@ -12,6 +12,50 @@ import {
 
 installCliFixture();
 
+function auditReport(
+  nodeId: string,
+  findings: Array<Record<string, unknown>> = [],
+  realWorldValidation: Record<string, unknown> = {
+    required: false,
+    status: "not_required",
+    evidence: "No external integration in this fixture.",
+  },
+): string {
+  return `${JSON.stringify({
+    nodeId,
+    acceptanceReviewed: [
+      {
+        criterion: "Audit workflows are durable.",
+        status: "passed",
+        evidence: "reports/audit-acceptance.md",
+      },
+    ],
+    verificationEvidence: {
+      diffReviewed: true,
+      completionReportReviewed: true,
+      verificationEvidenceReviewed: true,
+    },
+    realWorldValidation,
+    findings,
+  })}\n`;
+}
+
+function auditFinding(
+  severity: string,
+  title: string,
+  evidence: string,
+  expected = "The audited behavior satisfies the spec.",
+): Record<string, unknown> {
+  return {
+    severity,
+    title,
+    evidence,
+    observed: evidence,
+    expected,
+    classification: "implementation",
+  };
+}
+
 describe("qd CLI audit command hardening", () => {
   it("exercises finding add, list, dispose, resolve, and promote branches", async () => {
     await qd("setup", "--no-hooks");
@@ -222,7 +266,7 @@ describe("qd CLI audit command hardening", () => {
         .length,
     ).toBe(2);
 
-    await writeFile(path.join(root, "audit-clean.json"), '{"nodeId":"audit-node","findings":[]}\n');
+    await writeFile(path.join(root, "audit-clean.json"), auditReport("audit-node"));
     expect(
       (await qdJson("audit", "validate", "--file", "audit-clean.json", "--json")).findings,
     ).toBe(0);
@@ -266,10 +310,7 @@ describe("qd CLI audit command hardening", () => {
     const failingRun = await qdJson("audit", "start", "audit-node", "--json");
     await writeFile(
       path.join(root, "audit-failed.json"),
-      `${JSON.stringify({
-        nodeId: "audit-node",
-        findings: [{ severity: "P2", title: "Follow up", evidence: "Needs repair." }],
-      })}\n`,
+      auditReport("audit-node", [auditFinding("P2", "Follow up", "Needs repair.")]),
     );
     const failed = await qdJson(
       "audit",
@@ -314,10 +355,7 @@ describe("qd CLI audit command hardening", () => {
     const blockedRun = await qdJson("audit", "start", "audit-node", "--json");
     await writeFile(
       path.join(root, "audit-blocking.json"),
-      `${JSON.stringify({
-        nodeId: "audit-node",
-        findings: [{ severity: "P1", title: "Blocker", evidence: "Still broken." }],
-      })}\n`,
+      auditReport("audit-node", [auditFinding("P1", "Blocker", "Still broken.")]),
     );
     const blocked = await qdJsonAllowExit(
       "audit",

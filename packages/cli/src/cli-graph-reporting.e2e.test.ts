@@ -5,6 +5,32 @@ import { expectQdFailure, installCliFixture, qd, qdJson, root } from "./cli-e2e-
 
 installCliFixture();
 
+async function writeCompletionReport(id: string): Promise<string> {
+  const reportPath = path.join(root, `${id}-completion.json`);
+  await writeFile(
+    reportPath,
+    `${JSON.stringify({
+      nodeId: id,
+      summary: "ready for review",
+      changedFiles: [`src/${id}.ts`],
+      acceptanceEvidence: [
+        { criterion: "Acceptance is proven.", status: "passed", evidence: "reports/acceptance.md" },
+      ],
+      commandsRun: [{ command: "just check", status: "passed", evidence: "logs/check.log" }],
+      evidence: ["reports/completion.md"],
+      realWorldValidation: {
+        required: false,
+        status: "not_required",
+        evidence: "graph reporting fixture",
+      },
+      unverifiedItems: [],
+      dagChangesNeeded: [],
+    })}\n`,
+    "utf8",
+  );
+  return reportPath;
+}
+
 describe("qd CLI graph reporting surfaces", () => {
   it("applies graph command selectors and validates command-specific branches", async () => {
     await qd("setup", "--no-hooks");
@@ -53,7 +79,7 @@ describe("qd CLI graph reporting surfaces", () => {
       "--acceptance",
       "Beta is built.",
     );
-    await qd("complete", "alpha", "--summary", "ready for review");
+    await qd("complete", "alpha", "--from-report", await writeCompletionReport("alpha"));
     expect((await qdJson("node", "cancel", "beta", "--json")).status).toBe("cancelled");
     expect(
       (

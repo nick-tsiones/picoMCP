@@ -169,15 +169,15 @@ Core graph:
 Lifecycle:
 
 - `qd start <id>` records implementation run
-- `qd complete <id> --summary ...`
+- `qd complete <id> --from-report <completion-report.json>`
 - `qd audit start <id>`
 - `qd finding add <id> --severity P1 --path ...`
 - `qd finding resolve <finding-id>`
 - `qd promote-findings <id>` converts open P2/P3 findings into new nodes
 - `qd gate <id>` fails if open P0/P1 findings exist
-- `qd ci start <id> --cmd "vp check && vp test"`
-- `qd ci pass <id>`
-- `qd merge <id> --strategy squash`
+- `qd ci run <id>`
+- `qd ci record-pass <id> --summary ... --url <ci-url>`
+- `qd merge <id> --use-existing-commit <sha>`
 
 Planning and reporting:
 

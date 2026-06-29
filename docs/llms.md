@@ -11,6 +11,19 @@ The intended model:
 - qd enforces the work contract: dependencies are respected, specs are completed, audits happen, P0/P1 findings are resolved, P2/P3 findings enter the DAG, and CI passes before merge.
 - Main should stay green. If CI does not pass, the node does not merge.
 
+Before creating or advancing work, read the qd method:
+
+```sh
+qd help method
+qd help reality
+```
+
+If this repository includes the qdcli docs, also read `docs/orchestration.md`.
+The method is part of the contract, not optional background: research precedes
+roadmap, specs are executable contracts, completion requires evidence, audits
+review evidence, environment/provider/credential failures are blockers, and main
+stays green.
+
 ## Install
 
 From the project that wants to use Quick DAG, make sure the `qd` executable is available. The source repository is:
@@ -86,7 +99,11 @@ qd ready --json
 qd snapshot --json
 ```
 
-If `qd doctor` reports stale schema, run `qd migrate --json` and rerun doctor before any normal DAG command. If `qd doctor` reports config or graph errors, fix those before delegating work. Use normal `qd doctor` for advisory setup checks during migration. Use `qd doctor --strict` in dogfood repositories that want warnings such as unregistered metadata or incomplete blocker records to fail.
+If `qd doctor` reports stale schema, run `qd migrate --json` and rerun doctor
+before any normal DAG command. If `qd doctor` reports config or graph errors,
+fix those before delegating work. Before real orchestration, use
+`qd doctor --strict` and treat warnings such as unregistered metadata or
+incomplete blocker records as work to fix, not optional noise.
 
 You may run qd from a subdirectory. qd resolves `--root`, then `QD_ROOT`, then the nearest ancestor `.qd/` directory.
 
@@ -102,12 +119,29 @@ Workspace roll-up is not a distributed executor. It helps the orchestrator decid
 
 ## Build The DAG
 
-Create nodes as executable specs, not vague todos. Each node should be independently mergeable and include concrete acceptance criteria.
+Create nodes as executable specs, not vague todos. Each node should be
+independently mergeable and include concrete acceptance criteria, declared
+verification, expected evidence, audit focus, risk, and known real-world
+dependencies.
+
+Research comes before roadmap shape. Do not create implementation nodes for an
+unknown integration, provider, API, database, deployment target, browser/runtime
+surface, credential model, or data source. First run:
+
+```sh
+qd prompt research
+```
+
+Research output should identify the real URLs, SDK calls, schemas, credentials,
+fixture provenance, response examples, failure modes, and environment
+requirements. If those facts cannot be verified, create research/blocker nodes.
+Do not write a node such as "figure out Stripe integration" and pretend it is
+implementation work.
 
 Useful commands:
 
 ```sh
-qd node add --id <id> --title "<title>" --spec "<spec>" --acceptance "<acceptance>"
+qd node add --from-json roadmap/nodes/<id>.json
 qd edge add <dependency-node> <blocked-node>
 qd validate
 qd graph --format mermaid
@@ -129,20 +163,17 @@ Use registered metadata when the project has real scheduling lanes, product area
 qd group register --name "runtime"
 qd project register --name "web"
 qd milestone register --name "baseline" --rank 10
-qd node add --id <id> --title "<title>" --spec "<spec>" --acceptance "<acceptance>" \
-  --group "runtime" \
-  --project "web" \
-  --milestone "baseline" \
-  --verify type=command,value="<node-specific verification command>" \
-  --audit-focus "Check the risky path and failure states."
+qd nodes add-bulk --from-json roadmap/mint-plan.json
 ```
 
 Rules:
 
 - Split by mergeable behavioral increments, not files or layers.
 - Use `requires` edges only for true technical prerequisites.
-- Use milestones for product phases, not dependency truth.
-- Add discovery nodes when unknowns must be resolved before implementation.
+- Use milestones for externally meaningful capability phases, not dependency truth.
+- Give milestones entry criteria, exit criteria, and validation nodes.
+- Add research/blocker nodes when unknowns must be resolved before implementation.
+- Treat warnings, known failures, and "pre-existing" failures as work or blockers unless they are explicitly accepted with rationale.
 
 ## Orchestrate Work
 
@@ -155,11 +186,14 @@ qd claim <node> --agent <subagent-name>
 qd prompt implement <node> --json
 ```
 
-The orchestrator owns node selection. Subagents should not independently pop arbitrary ready work unless the user intentionally designs a distributed execution harness around qd's ownership records. In the normal workflow, the orchestrator chooses a bounded set of ready nodes, delegates those specs, then records results. Delegate the implementation prompt and project context to a subagent. When the subagent completes work, record it:
+The orchestrator owns node selection. Subagents should not independently pop arbitrary ready work unless the user intentionally designs a distributed execution harness around qd's ownership records. In the normal workflow, the orchestrator chooses a bounded set of ready nodes, delegates those specs, then records results. Delegate the implementation prompt and project context to a subagent.
 
-```sh
-qd complete <node> --summary "<what changed>"
-```
+Completion is not a status assertion. It is an evidence-backed handoff to audit.
+The implementer must show what changed, which acceptance criteria were exercised,
+which real APIs/services/providers/databases/browsers/deployment targets were
+used, which commands ran, and where the logs/artifacts live. If required
+validation cannot run, block, split, or revise the node instead of completing
+it.
 
 When delegation needs durable ownership records, use assignments. Assignment owners are opaque strings; examples may be `human:trevor`, `external:worker-1`, `github-actions:<run-id>`, or any other harness-owned identifier. qd records ownership and evidence, but it does not launch or control that worker.
 
@@ -179,16 +213,25 @@ qd wave complete <wave-id> --summary "<what landed>"
 qd wave status --json
 ```
 
-If a node is blocked by a manual, external, or policy condition, record that explicitly instead of leaving it in the ready queue:
+If a node is blocked by a manual, external, policy, environment, credential,
+provider, or data condition, record that explicitly instead of leaving it in the
+ready queue:
 
 ```sh
-qd node edit <node> --blocked-by manual --blocked-reason "<specific blocker>" --blocked-owner "<owner>"
-qd node edit <node> --clear-blocker --status ready
+qd block <node> \
+  --type credential \
+  --reason "<specific blocker>" \
+  --owner "<owner>" \
+  --needed "<exact action needed to unblock>" \
+  --evidence "<path-or-proof>"
+qd unblock <node> \
+  --summary "<what changed so work is valid again>" \
+  --evidence "<path-or-proof>"
 ```
 
-Blocked nodes are not ready work, even when dependencies are complete. Do not use blocker metadata for dependency truth; use `requires` edges for that. If the blocker is a no-go policy, physical-presence requirement, external dependency, or owner decision, keep it blocked until that condition changes. `qd gate <node> --json` reports `nodeBlocked` with the blocker type, reason, and owner so the orchestrator can stop instead of trying to advance it.
+Blocked nodes are not ready work, even when dependencies are complete. Do not use blocker metadata for dependency truth; use `requires` edges for that. If the blocker is a no-go policy, physical-presence requirement, external dependency, owner decision, missing credential, bad URL, unavailable provider, or absent data source, keep it blocked until that condition changes. Unblock only with evidence that the condition is gone. `qd gate <node> --json` reports `nodeBlocked` with the blocker type, reason, and owner so the orchestrator can stop instead of trying to advance it.
 
-Start audit:
+Start audit only after implementation evidence exists:
 
 ```sh
 qd audit start <node>
@@ -207,9 +250,15 @@ Use `qd finding list --open --severity P0,P1 --json` for a dashboard of active b
 Severity policy:
 
 - P0: security, data loss, build break, or critical incorrect behavior.
-- P1: important regression or missing required acceptance.
+- P1: important regression, missing required acceptance, missing required real-world validation, or environment/provider/credential issue that prevents required validation.
 - P2: non-blocking follow-up that should become a DAG node.
 - P3: polish or future improvement.
+
+An audit is independent evidence review. It is not CI and it is not a summary
+rewrite. The auditor must inspect the diff, the spec, every acceptance
+criterion, completion evidence, verification logs, real API responses or
+fixtures when relevant, mock/stub boundaries, failure paths, and regression
+risk. A clean audit that did not inspect required evidence is not clean.
 
 P0/P1 findings block CI and merge. P2/P3 findings should be promoted into future nodes after the current node passes the gate:
 
@@ -247,10 +296,14 @@ Normal path:
 qd gate <node> --phase ci --json
 qd check run <node>
 qd ci run <node>
-qd merge <node>
+# perform the repository's real merge, then record it
+qd merge <node> --use-existing-commit <sha>
 ```
 
-For a clean happy path, `qd advance <node> --summary "<what changed>"` can run completion, gate, configured check, and configured CI in sequence. Add `--merge --use-existing-commit <sha>` only after the real repository merge has happened and it is correct to record qd's merge state. qd still does not perform the real git or GitHub merge.
+Lifecycle shortcuts are only safe when they record the same evidence-backed state
+as the explicit commands. Add `--merge --use-existing-commit <sha>` only after
+the real repository merge has happened and it is correct to record qd's merge
+state. qd still does not perform the real git or GitHub merge.
 
 `qd ci run` runs the configured `ci_command`, streams output, writes a log under `.qd/logs/`, records pass/fail, and moves the node to `mergeable` or `blocked`.
 
@@ -308,6 +361,20 @@ These show ready work, completed points, remaining points, velocity, critical pa
 
 `qd view` serves the embedded read-only dashboard from the installed CLI. Use it for human inspection, but keep all state changes in CLI commands so the DAG remains auditable.
 
+Run periodic reality checks as part of normal orchestration:
+
+```sh
+qd prompt repo-audit
+qd prompt dag-review
+qd prompt reality-check
+```
+
+After about 10 merged nodes, run a general repo audit and add every real finding
+to qd. After about 30 merged nodes, review the DAG and milestone plan itself.
+Run an immediate reality check after any major API, provider, schema,
+credential, environment, CI, deployment, or product assumption fails. A reality
+check that does not inspect real evidence is just another rubber stamp.
+
 When audit context depends on branch diffs, prefer `qd diff <node> --self-only --base main` over ad hoc `main..branch` prompts. It uses the node's recorded branch and merge-base to avoid including unrelated movement from main. For uncommitted worktree changes, use `qd diff <node> --working`.
 
 If the project has installed semantic diff tooling, use it explicitly in the audit handoff:
@@ -325,8 +392,8 @@ For a first adoption trial, get one real but low-risk node from ready to done:
 
 1. create or select a ready node
 2. claim it for a subagent
-3. complete implementation
-4. audit it
+3. complete implementation with evidence
+4. audit diff, acceptance, and evidence
 5. resolve P0/P1 findings
 6. promote P2/P3 findings
 7. run `qd ci run`

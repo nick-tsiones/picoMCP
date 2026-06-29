@@ -296,7 +296,11 @@ describe("CLI node input hardening", () => {
       );
       await writeFile(
         path.join(root, "patch.json"),
-        `${JSON.stringify({ title: "JSON patch", blocked_by: "manual", blocked_reason: "owner" })}\n`,
+        `${JSON.stringify({ title: "JSON patch" })}\n`,
+      );
+      await writeFile(
+        path.join(root, "blocker-patch.json"),
+        `${JSON.stringify({ blocked_by: "manual", blocked_reason: "owner" })}\n`,
       );
 
       await expect(nodeInputFromOptions(root, { "from-json": "node.json" })).resolves.toMatchObject(
@@ -331,18 +335,17 @@ describe("CLI node input hardening", () => {
           "from-json": "patch.json",
           title: "CLI wins",
           project: ["core", "cli"],
-          "clear-blocker": true,
         }),
       ).resolves.toMatchObject({
         title: "CLI wins",
         projects: ["core", "cli"],
-        blocked_by: null,
-        blocked_reason: null,
-        blocked_owner: null,
       });
       await expect(nodeUpdateFromOptions(root, { "blocked-by": "manual" })).rejects.toThrow(
-        /--blocked-reason is required/,
+        /Use qd block or qd unblock/,
       );
+      await expect(
+        nodeUpdateFromOptions(root, { "from-json": "blocker-patch.json" }),
+      ).rejects.toThrow(/Use qd block or qd unblock/);
     });
   });
 

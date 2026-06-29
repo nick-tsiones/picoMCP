@@ -23,7 +23,7 @@ import {
   optionalStringField,
   requiredNodeStringField,
 } from "./object-utils.js";
-import { validateVerificationReport } from "./schemas.js";
+import { validateCompletionReport, validateVerificationReport } from "./schemas.js";
 import { runShellCommand } from "./shell.js";
 
 export async function checkCommand(
@@ -248,8 +248,19 @@ export async function advanceCommand(
   let node = await getNode(root, id);
 
   if (shouldCompleteForAdvance(node.status)) {
-    const summary = required(options.summary, "--summary");
-    node = await completeNode(root, id, summary);
+    if (!options["from-report"]) {
+      throw new Error(
+        "qd advance would complete this node first, so it requires --from-report <completion-report.json> with structured validation evidence.",
+      );
+    }
+    const reportPath = required(options["from-report"], "--from-report");
+    const report = await readJson(root, reportPath);
+    const validated = validateCompletionReport(report);
+    const reportNodeId = requiredNodeId(report, undefined, "completion report");
+    if (reportNodeId !== id) {
+      throw new Error(`completion report nodeId ${reportNodeId} does not match ${id}`);
+    }
+    node = await completeNode(root, id, { summary: validated.summary, reportPath });
     steps.push({ step: "complete", ok: true, detail: { status: node.status } });
   }
 
@@ -337,4 +348,13 @@ export function advanceNextAction(status: string, mergeRequested: boolean): stri
   return status === "mergeable" && !mergeRequested
     ? "Perform the real git/GitHub merge, then run qd merge --use-existing-commit <sha> or qd advance --merge --use-existing-commit <sha>."
     : null;
+}
+
+function requiredNodeId(report: unknown, fallback: string | undefined, context: string): string {
+  const record = asRecord(report, context);
+  const reportNodeId = requiredNodeStringField(record, "nodeId", context, "node_id");
+  if (fallback && fallback !== reportNodeId) {
+    throw new Error(`${context} nodeId ${reportNodeId} does not match ${fallback}`);
+  }
+  return fallback ?? reportNodeId;
 }

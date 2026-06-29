@@ -69,13 +69,19 @@ qd agent install skills-sh
 
 The installed skill should teach the orchestrator to:
 
+- read and acknowledge qd's method before planning or advancing work
+- research product/API/data/environment facts before creating implementation nodes
+- treat specs as executable contracts with evidence requirements
 - use `qd ready` before choosing work to delegate
 - use `qd claim` to mark delegated ownership
 - use `qd prompt implement <node>` for scoped context
-- record progress with `qd complete`
+- record completion only with structured evidence for acceptance criteria
+- treat audits as independent evidence review, not CI or summary review
 - create audit findings with `qd finding add`
 - block merge on P0/P1 findings
 - promote P2/P3 findings into future DAG nodes
+- record environment/provider/credential/data issues as blockers, not P3 polish
+- run repo audits after about 10 merges and DAG reality reviews after about 30 merges
 - prefer `--json` when parsing CLI output
 
 ## 3. Initialize the repository
@@ -125,7 +131,11 @@ Use the repository's real commands. qd is language- and stack-neutral.
 
 `ci_command` is the full trusted merge gate. It runs when the orchestrator calls `qd ci run <node>`. A passed CI run moves the node to `mergeable`; a failed run blocks it. The intended policy is green main: if CI does not pass, the node does not merge.
 
-The default lifecycle policy is strict because qd is designed to keep main green: audit before CI, declared verification before CI, no undisposed P2/P3 findings before merge, and a real merge commit recorded with `qd merge --use-existing-commit <sha>`. Relax those settings only when the project has an explicit reason and records that reason in its setup notes.
+The lifecycle policy is strict because qd is designed to keep main green: audit
+before CI, declared verification before CI, no undisposed P2/P3 findings before
+merge, and a real merge commit recorded with
+`qd merge --use-existing-commit <sha>`. Do not weaken this for normal
+orchestration; if reality prevents progress, record a blocker or revise the DAG.
 
 If the repository uses a supported hosted CI adapter, configure it separately from local commands. The first built-in adapter is GitHub through the `gh` CLI:
 
@@ -182,7 +192,7 @@ qd doctor --json
 
 `qd migrate` applies pending schema changes in place. It is the normal upgrade path for existing `.qd/qd.db` caches; do not delete the DB and reimport unless the user explicitly chooses that recovery path.
 
-`qd doctor` should check:
+`qd doctor --strict` should check:
 
 - CLI binary is available
 - database schema is current
@@ -191,6 +201,9 @@ qd doctor --json
 - graph has no cycles
 - every non-draft node has acceptance criteria
 
+Strict doctor output is part of the setup gate. Treat warnings as work to fix
+before autonomous orchestration starts.
+
 An installed CLI should report `runtime.viewer = "embedded"`. Empty `check_command` or `ci_command` values are setup warnings. Configure them before starting real orchestration.
 
 ## 5. Hand off to an agent
@@ -198,7 +211,7 @@ An installed CLI should report `runtime.viewer = "embedded"`. Empty `check_comma
 Give the orchestrator agent one operational instruction:
 
 ```text
-Read the qd DAG skill, run qd doctor, inspect qd status and qd ready, then orchestrate the DAG: delegate ready nodes, record audits and findings, require CI green, and merge only qd-mergeable work.
+Read the qd DAG skill and qd method first. Then run qd doctor, inspect qd status and qd ready, research any unknown product/API/environment facts before creating nodes, delegate only ready nodes, record completion with evidence, audit evidence independently, block real environment/provider/credential failures, require CI green, and merge only qd-mergeable work.
 ```
 
 For a single-link bootstrap:

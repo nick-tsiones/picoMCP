@@ -13,7 +13,7 @@ import {
 installCliFixture();
 
 describe("qd CLI edit and sync surfaces", () => {
-  it("edits structured blocker metadata from flags and JSON patches", async () => {
+  it("routes structured blocker metadata through block and unblock commands", async () => {
     await qd("setup", "--no-hooks");
     await qd(
       "node",
@@ -29,52 +29,60 @@ describe("qd CLI edit and sync surfaces", () => {
     );
 
     const direct = await qdJson(
-      "node",
-      "edit",
+      "block",
       "hardening-retire-bootstrap-lan-ssh",
-      "--blocked-by",
+      "--type",
       "manual",
-      "--blocked-reason",
+      "--reason",
       "Physical-presence-only SSH/firewall/networking no-go; requires owner console and recovery plan.",
+      "--owner",
+      "trevor",
+      "--needed",
+      "Create owner console and recovery plan before changing SSH/firewall/networking.",
+      "--evidence",
+      "reports/bootstrap-lan-ssh-blocker.md",
       "--json",
     );
-    expect(direct.status).toBe("blocked");
-    expect(direct.blocked_by).toBe("manual");
-    expect(direct.blocked_reason).toContain("Physical-presence-only");
+    expect(direct.node.status).toBe("blocked");
+    expect(direct.node.blocked_by).toBe("manual");
+    expect(direct.node.blocked_reason).toContain("Physical-presence-only");
 
-    await qd(
-      "node",
-      "edit",
+    await qdJson(
+      "unblock",
       "hardening-retire-bootstrap-lan-ssh",
-      "--clear-blocker",
-      "--status",
-      "ready",
+      "--summary",
+      "Owner console and recovery plan are documented.",
+      "--evidence",
+      "reports/bootstrap-lan-ssh-unblocked.md",
+      "--json",
     );
     await writeFile(
       path.join(root, "patch.json"),
       `${JSON.stringify({
-        blocked_by: "external",
-        blocked_reason: "Waiting for the upstream maintenance window.",
-        blocked_owner: "ops",
+        nodeId: "hardening-retire-bootstrap-lan-ssh",
+        type: "external-dependency",
+        reason: "Waiting for the upstream maintenance window.",
+        owner: "ops",
+        needed: "Confirm the upstream maintenance window is active.",
+        evidence: "reports/upstream-maintenance-window.md",
       })}\n`,
       "utf8",
     );
 
     const patched = await qdJson(
-      "node",
-      "edit",
+      "block",
       "hardening-retire-bootstrap-lan-ssh",
-      "--from-json",
+      "--from-report",
       "patch.json",
       "--json",
     );
-    expect(patched.status).toBe("blocked");
-    expect(patched.blocked_by).toBe("external");
-    expect(patched.blocked_reason).toBe("Waiting for the upstream maintenance window.");
-    expect(patched.blocked_owner).toBe("ops");
+    expect(patched.node.status).toBe("blocked");
+    expect(patched.node.blocked_by).toBe("external-dependency");
+    expect(patched.node.blocked_reason).toBe("Waiting for the upstream maintenance window.");
+    expect(patched.node.blocked_owner).toBe("ops");
 
     await expectQdFailure(
-      /--blocked-reason is required when --blocked-by is set/,
+      /Use qd block or qd unblock/,
       "node",
       "edit",
       "hardening-retire-bootstrap-lan-ssh",
@@ -91,7 +99,7 @@ describe("qd CLI edit and sync surfaces", () => {
       "utf8",
     );
     await expectQdFailure(
-      /blocked_reason is required when blocked_by is set/,
+      /Use qd block or qd unblock/,
       "node",
       "edit",
       "hardening-retire-bootstrap-lan-ssh",
@@ -113,24 +121,35 @@ describe("qd CLI edit and sync surfaces", () => {
       "hardening-retire-bootstrap-lan-ssh",
       "--from-json",
       "clear-blocker-patch.json",
-      "--clear-blocker",
-      "--status",
-      "ready",
       "--json",
     );
     expect(cleared.title).toBe("Retired bootstrap LAN SSH");
-    expect(cleared.status).toBe("ready");
-    expect(cleared.blocked_by).toBeNull();
-    expect(cleared.blocked_reason).toBeNull();
+    expect(cleared.status).toBe("blocked");
+    expect(cleared.blocked_by).toBe("external-dependency");
 
-    await qd(
-      "node",
-      "edit",
+    await qdJson(
+      "unblock",
       "hardening-retire-bootstrap-lan-ssh",
-      "--blocked-by",
+      "--summary",
+      "Upstream maintenance window is complete.",
+      "--evidence",
+      "reports/upstream-maintenance-complete.md",
+      "--json",
+    );
+    await qdJson(
+      "block",
+      "hardening-retire-bootstrap-lan-ssh",
+      "--type",
       "manual",
-      "--blocked-reason",
+      "--reason",
       "Requires owner console access.",
+      "--owner",
+      "trevor",
+      "--needed",
+      "Owner console must be available.",
+      "--evidence",
+      "reports/owner-console-required.md",
+      "--json",
     );
     await configureStrictDoctorCommands();
     const doctor = await qdJson("doctor", "--strict", "--json");

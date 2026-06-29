@@ -22,6 +22,25 @@ qd sync --from roadmap/spec-dag.json
 
 Nodes are executable specs. They include title, kind, typed milestone, group, projects, status, priority, estimate, risk, branch, spec, acceptance, validation text, typed verification entries, audit focus guidance, context, status reason, manual/external/policy blocker metadata, per-node check/CI overrides, and timestamps.
 
+In the qd 0.2 method, a node's spec is not free-form task prose. It is the
+human-readable part of a structured contract. Implementation nodes should be
+backed by:
+
+- objective
+- non-goals
+- independently checkable acceptance criteria
+- declared verification
+- expected evidence
+- real-world dependencies
+- environment, credential, provider, data, or deployment requirements
+- audit focus
+- risk and blast radius
+- verified assumptions or explicit blockers
+- rollback or recovery notes when relevant
+
+Integration-heavy nodes should reference research evidence that established the
+real API/provider/data/environment shape before implementation begins.
+
 If groups, projects, or milestones have been registered, qd validates node values against those registries. This lets a project define strict scheduling lanes, product areas, and milestone ranks without hard-coding one universal taxonomy.
 
 Minimal one-node JSON for `qd node add --from-json <file>`:
@@ -69,14 +88,14 @@ Bulk mint plan for `qd nodes add-bulk --from-json <file>`:
 
 Bulk minting is transactional. qd validates the full plan, auto-registers referenced groups, projects, and milestones, and writes the nodes and edges as one batch.
 
-Manual or external blockers are represented on the node:
+Canonical qd exports preserve typed blockers on the node:
 
 ```json
 {
   "id": "fixture-review",
   "title": "Review fixture provenance",
   "status": "blocked",
-  "blockedBy": "manual",
+  "blockedBy": "credential",
   "blockedReason": "Fixture provenance review has not been signed off.",
   "blockedOwner": "trevor",
   "spec": "Wait for the review outcome before dispatching implementation.",
@@ -84,7 +103,7 @@ Manual or external blockers are represented on the node:
 }
 ```
 
-Blocked nodes are excluded from `qd ready`. Use dependency edges for technical ordering, findings for audit issues, and blocker metadata for manual, external, or policy state.
+Blocked nodes are excluded from `qd ready`. Use dependency edges for technical ordering, findings for audit issues, and blocker metadata for reality that prevents honest progress: manual, external, policy, environment, credential, provider, data, or external-dependency state. Normal CLI mutation should use `qd block` and `qd unblock` so reason, owner, needed action, and evidence are recorded.
 
 ## Edges
 
@@ -93,6 +112,13 @@ Edges connect nodes. Only `requires` edges participate in readiness.
 ## Runs
 
 Runs record implementation, audit, resolve, check, verification, CI, and merge lifecycle events.
+
+Implementation completion should be represented by a completion report, not by
+a summary alone. The report should map every acceptance criterion to evidence,
+list commands and results, identify real APIs/services/providers/databases/
+browsers/deployment targets exercised, link artifacts/logs, and list any
+unverified items. If unverified items remain, the node should normally be
+blocked, split, or revised instead of completed.
 
 `qd check run <node>` runs the configured `check_command` or the node's `check_command` override, writes a log under `.qd/logs/`, and records a check run. A passed check does not make the node mergeable.
 
@@ -156,6 +182,12 @@ Findings belong to a node and can be P0, P1, P2, or P3.
 
 Structured audit reports can be imported with `qd finding add --from-report <file>`. The report must contain `nodeId` or `node_id` unless the node id is passed positionally, plus a `findings` array with severity, title, evidence, and optional path, line, expected, and suggested fix fields. `qd audit pass <node> --from-report <file>` uses the same shape, allows an empty findings array for clean audits, fails on P0/P1 findings, and promotes P2/P3 findings.
 
+Audit reports should also record what evidence was inspected: diff, acceptance
+matrix, completion report, verification logs, real API responses or fixtures,
+screenshots, CI logs, deployment proof, and mock/stub boundaries. Missing
+required evidence is a P1. An environment/provider/credential/data failure that
+prevents required validation is not P3 polish; it is a blocker or P1 finding.
+
 Minimal audit report:
 
 ```json
@@ -209,7 +241,11 @@ Minimal audit report:
 ### BlockerType
 
 - `manual`: a person or orchestrator must sign off before the node can proceed.
-- `external`: waiting on an outside system, upstream change, vendor, credential, fixture, or environment.
+- `environment`: the target local, CI, staging, production, browser, OS, network, or runtime environment is not available or not valid for the node.
+- `credential`: required auth, API key, token, permission, or secret state is missing, expired, or unverified.
+- `provider`: required external provider behavior, endpoint, dashboard, quota, or service state is unavailable or contradicted the plan.
+- `data`: required fixture, dump, schema, sample, migration, or dataset is missing, stale, or has unverified provenance.
+- `external`: waiting on an outside system, upstream change, vendor, fixture, or external dependency that is not better described by the specific types above.
 - `policy`: blocked by a project rule, release rule, compliance rule, or owner decision.
 
 ### Priority

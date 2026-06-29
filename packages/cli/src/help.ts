@@ -38,7 +38,8 @@ Core:
   qd velocity [--window 7]
   qd critical-path [--milestone <name>]
   qd eta [--window 7] [--milestone <name>]
-  qd prompt plan|implement|audit|resolve [node] [--include-project-rules <path>] [--base main] [--diff-tool git|sem|inspect] [--json]
+  qd help method|reality|specs|milestones|audits|blockers|evidence
+  qd prompt plan|research|implement|audit|resolve|reality-check|repo-audit|dag-review [node] [--include-project-rules <path>] [--base main] [--diff-tool git|sem|inspect] [--json]
   qd config show
   qd config get ci-command
   qd config set check-command "<fast project check command>"
@@ -53,7 +54,6 @@ Core:
   qd policy evaluate <node> --phase ci|merge
 
 Graph:
-  qd node add --title <text> --spec <text> --acceptance <text> [--id <id>] [--project <name>] [--verify type=command,value="<command>"] [--ci-command <command>]
   qd node add --from-json <node.json>
   qd node add --title <text> --spec-file <path> --acceptance-file <path>
   qd nodes add-bulk --from-json <plan.json>
@@ -61,16 +61,16 @@ Graph:
   qd node show <id> --full
   qd node edit <id> --from-json <patch.json>
   qd node edit <id> --spec-file <path> --acceptance-file <path>
-  qd node edit <id> --blocked-by manual|external|policy --blocked-reason <text> [--blocked-owner <name>]
-  qd node edit <id> --clear-blocker --status ready
+  qd block <id> --type environment|credential|provider|data|manual|policy|external-dependency --reason <text> --owner <name> --needed <text> --evidence <path-or-proof>
+  qd unblock <id> --summary <text> --evidence <path-or-proof>
   qd note add <node> --text <text>
   qd group register --name <name>
   qd project register --name <name>
   qd milestone register --name <name> --rank <n>
   qd edge add <from> <to> [--type requires]
   qd claim [node] --agent <name> [--branch <branch>]
-  qd complete <node> --summary <text>
-  qd advance <node> --summary <text> [--merge --use-existing-commit <sha>]
+  qd complete <node> --from-report <completion-report.json>
+  qd advance <node> --from-report <completion-report.json> [--merge --use-existing-commit <sha>]
   qd diff <node> [--base main] [--self-only] [--working] [--tool git|sem|inspect] [--format markdown|json|plain]
   qd worktree create <node> [--branch spec/<node>] [--path <path>] [--env-template .env.example] [--env KEY=value]
   qd worktree env <node> [--env-template .env.example] [--env KEY=value]
@@ -100,7 +100,7 @@ export function commandHelp(group: string, action?: string): string {
   const key = [group, action].filter(Boolean).join(" ");
   const entries: Record<string, string> = {
     complete:
-      "qd complete <node> --summary <text>\nRecords implementation completion and moves the node to review.",
+      "qd complete <node> --from-report <completion-report.json>\nRecords evidence-backed implementation completion. Completion means ready for audit, not done.",
     init: "qd init [--json]\nInitializes .qd, config, logs, and applies current DB migrations.",
     migrate:
       "qd migrate [--json]\nApplies pending qd DB schema migrations in place. Run this after upgrading qd when doctor reports stale schema.",
@@ -108,7 +108,7 @@ export function commandHelp(group: string, action?: string): string {
       "qd import --from <json> [--schema-mapping <json>] [--adapter roadmap-html|markdown-checklist] [--dry-run] [--verbose] [--allow-defaults] [--merge]\nImports non-qd DAGs or qd canonical exports with strict dry-run validation.",
     sync: "qd sync --from <qd-export.json> [--dry-run] [--expect-clean] [--write-diff <json>]\nValidates and optionally replaces the local qd cache from committed qd JSON.",
     advance:
-      "qd advance <node> --summary <text> [--merge --use-existing-commit <sha>] [--skip-check] [--skip-ci]\nRuns completion, gate, check, CI, and optionally records merge state after a real merge commit is supplied.",
+      "qd advance <node> --from-report <completion-report.json> [--merge --use-existing-commit <sha>]\nRuns the evidence-backed lifecycle. It must not bypass audit, verification, CI, or real merge evidence.",
     check:
       "qd check run <node> [--cmd <command>] [--no-hooks]\nRuns the configured fast preflight and records a check run/log.",
     "check run":
@@ -130,6 +130,8 @@ export function commandHelp(group: string, action?: string): string {
     diff: "qd diff <node> [--base main] [--self-only] [--working] [--tool git|sem|inspect] [--format markdown|json|plain]\nPrints committed or worktree-local node diffs. git is built in; sem and inspect are explicit optional adapters and fail loudly when unavailable.",
     worktree:
       "qd worktree create|env|status|list|cleanup <node> [--base main]\nCreates git worktrees, records node branches, reports dirty/ahead/behind state, and writes worktree-local env files without storing env values in qd.",
+    prompt:
+      "qd prompt plan|research|implement|audit|resolve|reality-check|repo-audit|dag-review [node]\nPrints strict orchestration prompts with the qd reality contract.",
   };
   return entries[key] ?? entries[group] ?? helpText();
 }
@@ -137,9 +139,9 @@ export function commandHelp(group: string, action?: string): string {
 export function topicHelp(topic: string): string {
   const topics: Record<string, string> = {
     lifecycle:
-      "qd lifecycle: ready -> claim -> complete -> audit -> gate -> check -> ci -> merge.\nP0/P1 findings and running audits block gate. qd records state; external tools do the work.",
+      "qd lifecycle: ready -> claim -> evidence-backed complete -> independent audit -> gate -> check -> ci -> real repo merge -> qd merge record.\nP0/P1 findings, missing evidence, blockers, and running audits stop advancement.",
     audits:
-      "qd audits: use qd audit start, qd audit pass/fail --from-report, and qd audit dispose/cancel/supersede with rationale for stale runs.",
+      "qd audits: audit means independent evidence review against diff, spec, acceptance, verification, real-world validation, and failure paths. CI is not an audit. Missing required evidence is P1.",
     worktrees:
       "qd worktrees: use one branch/worktree per active node or assignment. qd refuses duplicate branch/path checkouts, reports dirty/ahead/behind state, can inject worktree-local env files, and never stores env values in DAG state.",
     diffs:
@@ -152,6 +154,18 @@ export function topicHelp(topic: string): string {
       "qd gates: qd gate blocks on open P0/P1 findings, running audit runs, explicit node blockers, and incomplete dependencies. Use qd gate <node> --phase ci|merge when deciding whether policy allows CI or merge.",
     policies:
       "qd policies: default policy requires audit before CI, declared verification before CI, P2/P3 disposition before merge, and a real merge commit recorded with qd merge.",
+    method:
+      "qd method: one strict roadmap model. Research precedes roadmap; specs are executable contracts; completion requires structured evidence; audits review evidence; environment/provider/credential/data failures are blockers; trusted CI and a real repo merge precede qd merge recording.",
+    reality:
+      "qd reality: Reality contract. never invent APIs, URLs, schemas, credentials, command output, CI status, files, or evidence. If required real-world validation cannot run, block, split, or research the node instead of completing or passing audit.",
+    specs:
+      "qd specs: good specs are small, independently mergeable, acceptance-driven, evidence-backed, and based on verified product/API/environment facts. Unknown integrations require research before implementation nodes.",
+    milestones:
+      "qd milestones: use milestones for externally meaningful capability phases with entry criteria, exit criteria, and validation nodes. Do not use milestones as batch labels or dependency substitutes.",
+    blockers:
+      "qd blockers: environment, credential, provider, data, manual, policy, and external-dependency issues are structured escape hatches to accurate state. Blocked nodes are not ready; unblocking requires evidence.",
+    evidence:
+      "qd evidence: completion, audit, verification, CI, and merge state need artifacts such as command logs, API responses, screenshots, fixtures, CI URLs, commits, or deployment proof tied to acceptance criteria.",
     export:
       "qd export: commit deterministic qd JSON, not .qd/qd.db. Configure [export].canonicalize_command for repo formatting hooks.",
     "agent-agnostic-orchestration":
