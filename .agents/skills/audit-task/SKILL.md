@@ -13,23 +13,26 @@ triggers:
 **CRITICAL — MODEL ROUTING**: This SKILL.md is loaded by the **dcode orchestrator** (deepseek-v4-pro). The orchestrator spawns an auditor subagent to evaluate a completed node. The auditor is read-only on source code.
 
 **Orchestrator responsibilities**:
+
 - Resolve the qd node from arguments
 - Load full qd node context
 - Spawn the auditor with node context and implementation evidence
 - Report the verdict
 
 **Auditor responsibilities**:
+
 - Read node acceptance, verification, and auditFocus
 - Read relevant source, tests, and git history
 - Run read-only checks
 - Return structured violations and concrete fix items
-</role>
+  </role>
 
 <phase name="audit-task">
 
 ## 1. Resolve the node (orchestrator)
 
 Parse `$ARGUMENTS`:
+
 - `NODE=<id>` or `ID=<id>`: exact qd node id
 - plain text: match node id or title
 - no arguments: use the current branch name or first ready/active node as context
@@ -43,6 +46,7 @@ qd export --deterministic --out /tmp/qd-export.json
 ```
 
 Load the node’s:
+
 - `spec`
 - `acceptance`
 - `verification[]`

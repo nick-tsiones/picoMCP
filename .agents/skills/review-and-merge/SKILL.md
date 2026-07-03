@@ -56,6 +56,7 @@ Invoke the `review-pr` workflow using the loaded qd node context.
 ## 6. qd bookkeeping
 
 After merge:
+
 - record completion evidence in the qd completion flow
 - refresh readiness with `qd ready --json`
 

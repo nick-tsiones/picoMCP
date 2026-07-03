@@ -19,6 +19,7 @@ triggers:
 **qd is not an agent runtime.** [qdcli](https://github.com/cat-cave/qdcli) (`qd`) is the strict evidence ledger: what is ready, blocked, proven, audited, and safe to merge. It does not run agents, write code, or perform git/GitHub merges. You keep the DAG accurate; you delegate nothing in this skill because synthesis is pure planning.
 
 **You (orchestrator, pro) in this skill**:
+
 - Read SDD.md and BEHAVIORS.jsonl, cluster and anchor
 - Research real external surfaces before authoring integration nodes
 - Author node JSON (issue + spec + tasks + acceptance + verification + audit focus)
@@ -61,6 +62,7 @@ Do not work around an acknowledgement failure — it means the method changed an
 You may be running unattended. Do NOT stop to ask questions.
 
 When you hit ambiguity:
+
 1. Consult the repo first — SDD.md, BEHAVIORS.jsonl, docs/standards/, prior roadmaps, `qd method show`.
 2. Use best judgment from established patterns and the Reality Contract.
 3. If a behavior/component truly cannot be placed or proven: author a research node or typed blocker for it and continue with the rest. Do not stall the whole DAG.
@@ -131,14 +133,14 @@ A behavior you cannot prove is not an implementation node. This is what keeps ev
 
 qd has **no first-class "tasks" field** — qd owns the issue/spec/tasks model through node fields, and a node is the structured, executable contract. So the tri-part issue/spec/tasks maps onto qd fields like this, and every behavior-bearing node carries the five defenses:
 
-| Your artifact | qd field(s) | Content |
-|---|---|---|
-| **issue** | `title`, `kind`, `priority`, `risk` (+ optional linked tracker URL as a `note`/`url` verification) | Behavior-oriented title; the unit of trackable work. The node *is* the issue. |
-| **spec** | `spec` (human-readable contract, markdown) | Objective, non-goals, SDD design slice, **Behaviors this node must prove** (list the exact `behavior_id`s), a `## Tasks` checklist, real-world dependencies, rollback/recovery. |
-| **spec (checkable)** | `acceptance` | One clause per scenario = its `Then`, as an observable outcome. Never "tests pass." |
-| **tasks** | folded into `spec` `## Tasks` + mirrored to `verification[]` | TDD-shaped; terminal task proves behavior + captures real evidence. |
-| **proof** | `verification[]` | One `{ "type": "command", "value": "..." }` per scenario, exercising the real Given→When→Then. |
-| **anti-gaming** | `auditFocus[]` | The reusable anti-min-max block (below). |
+| Your artifact        | qd field(s)                                                                                        | Content                                                                                                                                                                         |
+| -------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **issue**            | `title`, `kind`, `priority`, `risk` (+ optional linked tracker URL as a `note`/`url` verification) | Behavior-oriented title; the unit of trackable work. The node _is_ the issue.                                                                                                   |
+| **spec**             | `spec` (human-readable contract, markdown)                                                         | Objective, non-goals, SDD design slice, **Behaviors this node must prove** (list the exact `behavior_id`s), a `## Tasks` checklist, real-world dependencies, rollback/recovery. |
+| **spec (checkable)** | `acceptance`                                                                                       | One clause per scenario = its `Then`, as an observable outcome. Never "tests pass."                                                                                             |
+| **tasks**            | folded into `spec` `## Tasks` + mirrored to `verification[]`                                       | TDD-shaped; terminal task proves behavior + captures real evidence.                                                                                                             |
+| **proof**            | `verification[]`                                                                                   | One `{ "type": "command", "value": "..." }` per scenario, exercising the real Given→When→Then.                                                                                  |
+| **anti-gaming**      | `auditFocus[]`                                                                                     | The reusable anti-min-max block (below).                                                                                                                                        |
 
 **Node JSON uses qd's typed fields** (camelCase; strict — malformed enums/arrays fail rather than being dropped). Required per node: `title`, `spec`, `acceptance`. Always set `id` (edges reference it and it keeps the DAG deterministic). Do NOT put blocker fields in node JSON — use `qd block` after minting.
 
@@ -168,7 +170,10 @@ Example node (2 scenarios), showing the full mapping:
   "spec": "## Objective\nRealize the token-refresh path in the SDD Auth component so callers never see an expired-token error when a valid refresh token exists.\n\n## Non-goals\nRefresh-token rotation policy (separate node). Login/logout flows.\n\n## SDD design slice\nAuth.SessionManager + TokenStore interface (SDD §3.2). Consumes the schema produced by `auth-config`.\n\n## Behaviors this node must prove\n- auth-refresh/expired-access-token-is-refreshed\n- auth-refresh/invalid-refresh-token-forces-reauth\n\n## Tasks\n- [ ] Write the failing end-to-end proof for each scenario against the real SessionManager + TokenStore (no mocked SUT).\n- [ ] Implement refresh in SessionManager until both scenarios hold.\n- [ ] Terminal: run both scenarios against the real surface; capture real request/response output as evidence for the completion report.\n\n## Real-world dependencies\nTokenStore-backed store from `auth-config`. No external provider.\n\n## Rollback\nFeature-flag the refresh path; revert to hard-expiry on flag off.",
   "acceptance": "Given a valid refresh token and an expired access token, when a protected endpoint is called, then the call succeeds and a new access token is issued (observable in the response/store). Given an invalid refresh token, when a protected endpoint is called, then the caller is forced to re-authenticate with no new token issued.",
   "verification": [
-    { "type": "command", "value": "<real e2e for expired-access-token-is-refreshed against SessionManager+TokenStore>" },
+    {
+      "type": "command",
+      "value": "<real e2e for expired-access-token-is-refreshed against SessionManager+TokenStore>"
+    },
     { "type": "command", "value": "<real e2e for invalid-refresh-token-forces-reauth>" }
   ],
   "auditFocus": [
@@ -181,7 +186,7 @@ Example node (2 scenarios), showing the full mapping:
 }
 ```
 
-**Derive edges.** Dependencies come mostly from `Given` clauses: a node whose precondition needs state another node *produces* (its `When`/`Then` output) depends on it. Reinforce with SDD structural deps (shared schema, foundational module, consumed interface).
+**Derive edges.** Dependencies come mostly from `Given` clauses: a node whose precondition needs state another node _produces_ (its `When`/`Then` output) depends on it. Reinforce with SDD structural deps (shared schema, foundational module, consumed interface).
 
 - Edge shape for the bulk plan: `{ "from": "<prerequisite-id>", "to": "<dependent-id>", "type": "requires" }`.
 - **Direction:** the arrow points prerequisite → dependent. `from` must be `done` before `to` is ready. "B depends on A" is `{ "from": "A", "to": "B" }`. Only `requires` affects readiness; qd rejects cycles at write time.
@@ -194,7 +199,14 @@ qd is the live authority once nodes are minted. `roadmap/dag-plan.json` is the b
 Assemble one plan object and mint it in a single all-or-nothing transaction (qd validates every node + edge, auto-registers referenced groups/projects/milestones, and refuses partial writes):
 
 ```json
-{ "nodes": [ /* every node from Phase 4 */ ], "edges": [ /* every derived edge */ ] }
+{
+  "nodes": [
+    /* every node from Phase 4 */
+  ],
+  "edges": [
+    /* every derived edge */
+  ]
+}
 ```
 
 ```sh
@@ -247,20 +259,21 @@ Before finishing, re-verify for every node: acceptance states the `Then` (not "t
 
 ## Recovery procedures
 
-| Situation | Action |
-|-----------|--------|
-| SDD.md or BEHAVIORS.jsonl missing/empty | Report `BLOCKED: missing <file>`. Do not invent inputs. |
-| Malformed line in BEHAVIORS.jsonl | Skip and log the bad line; if it names a required behavior, mark it a research/blocker item. Never guess its intent. |
-| Behavior can't be anchored to any SDD component | Author a research node to locate the surface, or a typed blocker; do not force it into an unrelated node. |
-| External surface unverifiable | `qd prompt research`; if still unknown, `qd block --type provider/credential/data/environment`. No fake-provable implementation node. |
-| Behavior provable only with a mock the SDD does not scope | `qd block --type data` (or provider). Do not author acceptance/verification that mocks the system under test. |
-| Orphan behavior after mint | Fix the plan (add to a node's acceptance + verification) and re-mint, or patch via `qd node edit`. |
-| Cycle detected on mint | Split the oversized node or remove the spurious edge; re-derive `Given`-based deps; re-mint. |
-| Duplicate node id | Rename to a unique, descriptive slug; re-mint (bulk is transactional). |
-| Method acknowledgement fails | Reread `qd method show` and re-acknowledge; do not work around it. |
-| `qd doctor` reports stale DB schema | `qd migrate --json`, then re-run doctor. |
+| Situation                                                 | Action                                                                                                                                |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| SDD.md or BEHAVIORS.jsonl missing/empty                   | Report `BLOCKED: missing <file>`. Do not invent inputs.                                                                               |
+| Malformed line in BEHAVIORS.jsonl                         | Skip and log the bad line; if it names a required behavior, mark it a research/blocker item. Never guess its intent.                  |
+| Behavior can't be anchored to any SDD component           | Author a research node to locate the surface, or a typed blocker; do not force it into an unrelated node.                             |
+| External surface unverifiable                             | `qd prompt research`; if still unknown, `qd block --type provider/credential/data/environment`. No fake-provable implementation node. |
+| Behavior provable only with a mock the SDD does not scope | `qd block --type data` (or provider). Do not author acceptance/verification that mocks the system under test.                         |
+| Orphan behavior after mint                                | Fix the plan (add to a node's acceptance + verification) and re-mint, or patch via `qd node edit`.                                    |
+| Cycle detected on mint                                    | Split the oversized node or remove the spurious edge; re-derive `Given`-based deps; re-mint.                                          |
+| Duplicate node id                                         | Rename to a unique, descriptive slug; re-mint (bulk is transactional).                                                                |
+| Method acknowledgement fails                              | Reread `qd method show` and re-acknowledge; do not work around it.                                                                    |
+| `qd doctor` reports stale DB schema                       | `qd migrate --json`, then re-run doctor.                                                                                              |
 
 ## Repository info
+
 - Repo: current repository
 - Inputs: `SDD.md` (high-level SDD spec), `BEHAVIORS.jsonl` (exhaustive gherkin behaviors)
 - DAG builder: qdcli — `pnpm dlx @cat-cave/qdcli` or installed `qd`

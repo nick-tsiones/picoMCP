@@ -14,6 +14,7 @@ triggers:
 **CRITICAL — MODEL ROUTING**: This SKILL.md is loaded by the **dcode orchestrator** (deepseek-v4-pro). The orchestrator NEVER touches code. It spawns implementor subagents via the `task` tool to do all code work.
 
 **Orchestrator responsibilities**:
+
 - Resolve the target qd node from arguments
 - Load qd node context from qd export
 - Set up the branch and worktree
@@ -22,12 +23,13 @@ triggers:
 - Run deterministic non-coding commands from the worktree
 
 **Implementor subagent responsibilities**:
+
 - Read the qd node context passed by the orchestrator
 - Implement the node’s `## Tasks` checklist
 - Run the node’s verification commands and quality gates
 - Commit code changes
 - Return evidence and verification summary
-</role>
+  </role>
 
 <phase name="implement-feature">
 
@@ -38,6 +40,7 @@ Implement a qd node end-to-end. qd is canonical; on-disk `spec/` files are optio
 ## 1. Parse arguments
 
 Parse `$ARGUMENTS` to determine the node:
+
 - `NODE=<id>` or `ID=<id>`: exact qd node id
 - `ISSUE=<id>`: treat as a lookup hint only if your project maps issue numbers into qd metadata
 - plain text: match against node id or title
@@ -56,6 +59,7 @@ qd ready --json
 ```
 
 Resolve the node from the export and gather:
+
 - `id`, `title`, `kind`, `priority`, `risk`, `milestone`
 - `spec`
 - `acceptance`
@@ -72,6 +76,7 @@ Resolve the node from the export and gather:
 ## 4. Research phase (orchestrator reads, does not modify)
 
 Read in this order:
+
 1. qd node `spec`
 2. repo standards referenced by the node spec
 3. existing files named in the node spec
@@ -122,10 +127,12 @@ If the subagent hits step limit, re-spawn immediately with the remaining work.
 ## 6. Live verification gate
 
 After the node tasks are complete, run any live verification demanded by the node:
+
 - prefer the node’s explicit `verification[]` commands
 - if the node spec requires a broader live suite, run that too
 
 If failures remain:
+
 1. capture the failing command and output
 2. re-spawn `deepseek-v4-flash-implementor` with those failures
 3. repeat until green or until a real blocker is identified

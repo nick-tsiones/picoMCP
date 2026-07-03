@@ -59,6 +59,7 @@ gh pr view <number> --json statusCheckRollup,mergeable,mergeStateStatus
 ## 5. Triage
 
 Classify each item:
+
 - valid
 - invalid
 - needs clarification
@@ -68,11 +69,13 @@ Proceed immediately. Do not wait for confirmation unless human clarification is 
 ## 6. Fix red CI or merge conflicts
 
 If CI is red or merge conflicts exist, spawn `deepseek-v4-flash-implementor` with:
+
 - the qd node context
 - the failing CI or conflict details
 - a requirement to fix only the identified issue
 
 The subagent must:
+
 1. read the qd node context
 2. inspect the CI logs or merge state
 3. fix the root cause
@@ -85,10 +88,12 @@ The subagent must:
 For valid non-CI feedback not yet fixed, update the qd node plan rather than hand-maintaining `tasks.md`.
 
 Preferred approach:
+
 - append a `## Review Feedback` checklist block to the node `spec`
 - or create a dedicated follow-up node if the feedback is materially separate work
 
 The updated plan must preserve:
+
 - acceptance intent
 - verification commands
 - dependency clarity
@@ -100,6 +105,7 @@ Reply to resolved comments with the concrete fix or planning update. If a follow
 ## 9. Handoff
 
 Report:
+
 - what was fixed now
 - what was deferred into qd planning context
 - whether CI is green

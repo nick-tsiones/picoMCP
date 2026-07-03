@@ -22,6 +22,7 @@ Shape a single executable planning unit in qd. In the qd workflow, the node is c
 ## 1. Gather context
 
 Read:
+
 - the linked issue or requested work item
 - relevant standards
 - existing qd export if the node already exists
@@ -30,6 +31,7 @@ Read:
 ## 2. Interview the user
 
 Ask only for information that is not recoverable from the repo or qd:
+
 1. What existing node or milestone does this depend on?
 2. What is the key non-negotiable decision?
 3. What real behavior must be proven?
@@ -39,6 +41,7 @@ Ask only for information that is not recoverable from the repo or qd:
 ## 3. Write or refine the qd node
 
 The node must contain:
+
 - title
 - kind / priority / risk
 - spec markdown with `## Objective`, `## Non-goals`, `## Tasks`, dependencies, and rollback notes

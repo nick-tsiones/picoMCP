@@ -20,32 +20,33 @@ Model routing and subagent management for a qd-driven development pipeline.
 
 ## Model Assignment
 
-| Role | Model | Provider | Touches Code? |
-|------|-------|----------|---------------|
-| Orchestrator | `deepseek/deepseek-v4-pro` | OpenRouter | No |
-| Implementor | `deepseek/deepseek-v4-flash` | OpenRouter | Yes |
-| Auditor | `deepseek/deepseek-v4-flash` | OpenRouter | Read-only |
-| Reviewer | `deepseek/deepseek-v4-flash` | OpenRouter | Read-only |
+| Role         | Model                        | Provider   | Touches Code? |
+| ------------ | ---------------------------- | ---------- | ------------- |
+| Orchestrator | `deepseek/deepseek-v4-pro`   | OpenRouter | No            |
+| Implementor  | `deepseek/deepseek-v4-flash` | OpenRouter | Yes           |
+| Auditor      | `deepseek/deepseek-v4-flash` | OpenRouter | Read-only     |
+| Reviewer     | `deepseek/deepseek-v4-flash` | OpenRouter | Read-only     |
 
 ## Workflow Skills
 
-| Skill | Purpose |
-|-------|---------|
-| `generate-dag` | Build the qd DAG from repo planning inputs |
-| `select-issue` | Select ready qd nodes |
-| `develop-batch` | Execute ready qd nodes end-to-end |
-| `implement-feature` | Implement one qd node |
-| `audit-task` | Audit one qd node implementation |
-| `handle-feedback` | Resolve PR feedback and update qd planning context |
-| `review-pr` | Score a PR against the qd node contract |
-| `review-and-merge` | Wait for green CI, review, and merge |
-| `create-pr` | Open a PR from the current qd-backed branch |
-| `test-feature` | Run node verification and quality gates |
-| `shape-spec` | Refine one qd node contract |
+| Skill               | Purpose                                            |
+| ------------------- | -------------------------------------------------- |
+| `generate-dag`      | Build the qd DAG from repo planning inputs         |
+| `select-issue`      | Select ready qd nodes                              |
+| `develop-batch`     | Execute ready qd nodes end-to-end                  |
+| `implement-feature` | Implement one qd node                              |
+| `audit-task`        | Audit one qd node implementation                   |
+| `handle-feedback`   | Resolve PR feedback and update qd planning context |
+| `review-pr`         | Score a PR against the qd node contract            |
+| `review-and-merge`  | Wait for green CI, review, and merge               |
+| `create-pr`         | Open a PR from the current qd-backed branch        |
+| `test-feature`      | Run node verification and quality gates            |
+| `shape-spec`        | Refine one qd node contract                        |
 
 ## Subagent Spawn Guidance
 
 When spawning an implementor, always pass:
+
 - node id and title
 - full qd node `spec`
 - `acceptance`
@@ -60,6 +61,7 @@ When spawning an auditor or reviewer, also pass the implementation evidence summ
 Project skills are exposed as `/skill:<name>`. The execution path assumes qd is initialized and the method has been acknowledged.
 
 Example:
+
 - `/skill:generate-dag`
 - `/skill:develop-batch 2`
 - `/skill:implement-feature NODE=session-token-refresh`

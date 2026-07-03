@@ -18,6 +18,7 @@ triggers:
 ## 0. Pre-review gates
 
 The review must not run until:
+
 1. required CI checks are green
 2. there are no unresolved review comments
 
@@ -53,6 +54,7 @@ qd export --deterministic --out /tmp/qd-export.json
 ```
 
 Load:
+
 - `spec`
 - `acceptance`
 - `verification[]`
@@ -107,6 +109,7 @@ Steps:
 ## 4. Post review summary
 
 If not auto-merged, post:
+
 - total score and threshold
 - findings
 - whether the issue is acceptance coverage, verification honesty, code quality, or CI health

@@ -14,6 +14,7 @@ triggers:
 **CRITICAL — MODEL ROUTING**: You are the **dcode orchestrator** (deepseek-v4-pro). You are the PM. You NEVER touch code. You manage worktrees, read qd state, spawn flash subagents for implementation and audit, and drive ready nodes from selection through merge.
 
 **You (orchestrator, pro)**:
+
 - Read qd readiness, dependencies, and exported node metadata
 - Create and manage worktrees
 - Spawn implementor and auditor subagents
@@ -23,6 +24,7 @@ triggers:
 - Report status every 5 minutes
 
 **Implementor subagent (flash)**:
+
 - All code work: read, write, edit source, tests, config
 - Execute node tasks from qd node spec
 - Run verification commands, quality gate, and live checks
@@ -30,6 +32,7 @@ triggers:
 - Return completion evidence summary
 
 **Auditor subagent (flash)**:
+
 - Read-only code analysis
 - Evaluate against node acceptance, verification, and auditFocus
 - Return violations and concrete fix items
@@ -44,6 +47,7 @@ triggers:
 You are running unattended. You MUST NOT stop to ask questions.
 
 When you encounter ambiguity:
+
 1. Read qd state first.
 2. Consult repo standards and nearby code patterns.
 3. If truly blocked, record the blocker in qd and move to the next ready node.
@@ -70,6 +74,7 @@ If the method acknowledgement fails, reread the method and retry. Do not proceed
 Run the `select-issue` workflow to choose the first `N` ready qd nodes.
 
 For each selected node, load its full context from `/tmp/qd-export.json`:
+
 - node id, title, kind, priority, risk, milestone
 - `spec`
 - `acceptance`
@@ -80,11 +85,13 @@ For each selected node, load its full context from `/tmp/qd-export.json`:
 ## Phase 2: Implementation (parallel, on worktrees)
 
 For each selected node, in parallel:
+
 1. Create worktree: `git worktree add -b issue-<node-id> /tmp/dcode/issue-<node-id> master`
 2. Re-export qd inside the repo if needed so the worktree has the latest node metadata
 3. Spawn subagent `deepseek-v4-flash-implementor`
 
 Pass the subagent the node context directly. The prompt must include:
+
 - worktree path
 - node id and title
 - the full `spec` markdown from qd
@@ -136,6 +143,7 @@ Never wait synchronously on a subagent. Poll and re-spawn immediately on step-li
 ## Phase 3: Audit + fix loop (parallel, per worktree)
 
 For each completed implementation:
+
 1. Spawn subagent `deepseek-v4-flash-auditor`
 2. Pass the same qd node context plus the implementor’s evidence summary
 
@@ -175,11 +183,13 @@ Return:
 ## Phase 4: PR creation + review (parallel, per worktree)
 
 For each passing node:
+
 1. Push: `git push origin issue-<node-id>`
 2. Create PR with title/body derived from the qd node title and evidence summary
 3. Poll CI until complete
 
 **CI GATE — ABSOLUTE HARD STOP.**
+
 - If any required check fails, spawn `deepseek-v4-flash-implementor` to fix the root cause, push, and re-poll.
 
 4. Check unresolved review comments before review
@@ -189,6 +199,7 @@ For each passing node:
 ## Phase 5: qd completion bookkeeping
 
 For each merged node:
+
 1. Generate the completion evidence payload from the implementor and reviewer output
 2. Use the repo’s qd completion flow to mark the node complete with real evidence
 3. Re-run `qd ready --json` so newly unblocked nodes can enter the frontier

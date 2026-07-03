@@ -48,6 +48,7 @@ If one already exists, print the URL and stop.
 ## 4. Gather PR body content
 
 Use:
+
 - qd node title and acceptance summary
 - implementation evidence summary
 - `git diff origin/master...HEAD --stat`
@@ -60,6 +61,7 @@ gh pr create --title "<title>" --body "<body>"
 ```
 
 The body must include:
+
 - qd node id and title
 - summary of implemented acceptance behavior
 - verification and test summary

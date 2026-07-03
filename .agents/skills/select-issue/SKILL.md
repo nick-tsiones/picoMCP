@@ -45,6 +45,7 @@ Use `qd ready --json` as the authoritative ready frontier. Use the export only t
 ## 3. Select candidates
 
 For each ready node, collect:
+
 - `id`
 - `title`
 - `kind`

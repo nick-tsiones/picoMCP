@@ -22,12 +22,15 @@ Shape a rough idea into a well-structured GitHub issue. No code is written.
 ## 1. Research phase
 
 Sample 5 closed issues spread across the project's history — pull one from each major era (early sandbox/permissions, mid MCP/self-hosting, recent TUI) plus two more from different sub-eras:
+
 ```bash
 gh issue list --repo <owner>/<repo> --limit 50 --state closed --json number,createdAt,title
 ```
+
 Pick by date spread so you get diverse formats, not 5 consecutive related issues.
 
 Read these orientation docs:
+
 - README.md
 - docs/README.md
 - docs/system-map.md
