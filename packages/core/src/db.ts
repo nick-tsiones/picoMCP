@@ -5,6 +5,7 @@ import { defaultConfig, formatConfig, parseConfig, type QdConfig } from "./confi
 import { migrations } from "./schema.js";
 
 export { defaultConfig, formatConfig, parseConfig, type QdConfig } from "./config.js";
+export { ProjectBoundaryError, assertWithinProjectBoundary, canonicalPath } from "./path_guard.js";
 
 export type Database = Awaited<ReturnType<typeof connect>>;
 

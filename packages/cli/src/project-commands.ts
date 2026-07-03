@@ -2,6 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   analyticsReport,
+  assertWithinProjectBoundary,
   criticalPathReport,
   deterministicGraphSnapshot,
   graphSnapshot,
@@ -184,7 +185,7 @@ export async function exportCommand(
   const outPath = stringOpt(options.out) ?? config.exportDefaultOut;
   if (!outPath) return output(exported, true);
 
-  const resolvedOut = path.resolve(root, outPath);
+  const resolvedOut = await assertWithinProjectBoundary(root, path.resolve(root, outPath));
   await mkdir(path.dirname(resolvedOut), { recursive: true });
   await writeFile(resolvedOut, `${JSON.stringify(exported, null, 2)}\n`, "utf8");
   if (!options["no-hooks"]) {

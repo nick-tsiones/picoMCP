@@ -1,0 +1,1188 @@
+{
+  "nodes": [
+    {
+      "id": "bootstrap-repo-git-gh",
+      "title": "Establish repository, git, and GitHub prerequisites for qd execution",
+      "kind": "infra",
+      "priority": "P0",
+      "risk": "high",
+      "milestone": "bootstrap",
+      "estimatePoints": 2,
+      "spec": "## Objective\nEstablish the repository-level prerequisites the SDD-derived DAG assumes for a greenfield workspace: instantiate this project as a valid git worktree rooted at the project, verify GitHub CLI availability/auth, and document the host execution context qd will rely on.\n\n## Non-goals\nImplementing picoMCP features.\n\n## SDD design slice\nSupport/process precondition for all components; qd config requires a real worktree and CI surface before downstream evidence can be trusted.\n\n## Behaviors this node must prove\n- bootstrap/repository-is-a-valid-git-worktree\n- bootstrap/github-cli-is-available-for-ci-and-pr-operations\n\n## Tasks\n- [ ] Instantiate or repair the project root into a usable git worktree for qd and document branch/remotes.\n- [ ] Verify GitHub CLI is installed and authenticated for the target repository workflow.\n- [ ] Record the canonical repository root and any host/shell path caveats that affect qd commands in this greenfield environment.\n- [ ] Terminal: run the bootstrap verification commands against the real repo and capture their output as evidence.\n\n## Real-world dependencies\nHost shell access to git and gh; if the workspace starts greenfield, git metadata and remote wiring must be created here before downstream qd work begins.\n\n## Rollback\nRestore prior git metadata/remotes if repository owners reject the instantiated bootstrap state.",
+      "acceptance": "The greenfield project workspace is instantiated or repaired into a valid git worktree from the execution environment, and GitHub CLI commands required for CI and PR workflows are available to qd with successful real-command evidence against that workspace's configured repository.",
+      "verification": [
+        {
+          "type": "command",
+          "value": "git -C /home/user/Documents/dev/picoMCP rev-parse --show-toplevel && git -C /home/user/Documents/dev/picoMCP remote -v"
+        },
+        {
+          "type": "command",
+          "value": "gh auth status && gh repo view --json nameWithOwner,defaultBranchRef"
+        }
+      ],
+      "auditFocus": [
+        "Each verification drives the real code path end-to-end; reject proofs that stub or mock the system under test (mocks allowed only at the SDD-declared adapter boundary).",
+        "Reject tautological, hard-coded, or assert-true checks; every acceptance clause must assert on the scenario's observable Then output.",
+        "Negation check: the proof must FAIL if the behavior is removed or broken. Greenness must depend on the implementation, not on the test's construction.",
+        "Coverage must not be achieved by deleting, weakening, or narrowing a scenario; all listed behaviors are exercised as written.",
+        "Every acceptance clause has real-surface evidence in the completion report; missing or mock-only evidence for a real behavior is a P1 finding, not P3 polish."
+      ]
+    },
+    {
+      "id": "bootstrap-qd-config",
+      "title": "Configure qd gates, merge policy, and export settings for this repository",
+      "kind": "infra",
+      "priority": "P0",
+      "risk": "medium",
+      "milestone": "bootstrap",
+      "estimatePoints": 2,
+      "spec": "## Objective\nConfigure qd with honest repository gates before any implementation node is considered ready: check command, CI command, merge strategy, and deterministic export path.\n\n## Non-goals\nExecuting CI or merging code.\n\n## SDD design slice\nProcess support around all components; the DAG is dishonest if qd points at empty or fake gates.\n\n## Behaviors this node must prove\n- bootstrap/qd-check-and-ci-gates-are-configured\n- bootstrap/qd-deterministic-export-is-configured\n\n## Tasks\n- [ ] Determine the repository's real fast preflight command and full trusted CI gate.\n- [ ] Set qd check-command, ci-command, merge-strategy, and export output deterministically.\n- [ ] Verify qd doctor and config reflect the real gates rather than placeholders.\n- [ ] Terminal: run the real qd config and doctor commands and capture the resulting configuration as evidence.\n\n## Real-world dependencies\nDepends on bootstrap-repo-git-gh because the repo and CI surface must be known first.\n\n## Rollback\nRestore prior .qd/config.toml if repository owners reject the configured gates.",
+      "acceptance": "qd reports non-empty repository-specific check and CI commands, the intended merge strategy, and a deterministic export target that match the real repo workflow.",
+      "verification": [
+        {
+          "type": "command",
+          "value": "pnpm dlx @cat-cave/qdcli config set check-command \"<real fast preflight command>\" && pnpm dlx @cat-cave/qdcli config set ci-command \"<real trusted CI command>\" && pnpm dlx @cat-cave/qdcli config set merge-strategy \"squash\" && pnpm dlx @cat-cave/qdcli config set export-default-out \"roadmap/spec-dag.json\""
+        },
+        {
+          "type": "command",
+          "value": "pnpm dlx @cat-cave/qdcli config get check-command && pnpm dlx @cat-cave/qdcli config get ci-command && pnpm dlx @cat-cave/qdcli doctor --json"
+        }
+      ],
+      "auditFocus": [
+        "Each verification drives the real code path end-to-end; reject proofs that stub or mock the system under test (mocks allowed only at the SDD-declared adapter boundary).",
+        "Reject tautological, hard-coded, or assert-true checks; every acceptance clause must assert on the scenario's observable Then output.",
+        "Negation check: the proof must FAIL if the behavior is removed or broken. Greenness must depend on the implementation, not on the test's construction.",
+        "Coverage must not be achieved by deleting, weakening, or narrowing a scenario; all listed behaviors are exercised as written.",
+        "Every acceptance clause has real-surface evidence in the completion report; missing or mock-only evidence for a real behavior is a P1 finding, not P3 polish."
+      ]
+    },
+    {
+      "id": "bootstrap-runtime-environment",
+      "title": "Verify runtime environment prerequisites for PICO-8-backed work",
+      "kind": "infra",
+      "priority": "P0",
+      "risk": "high",
+      "milestone": "bootstrap",
+      "estimatePoints": 3,
+      "spec": "## Objective\nVerify the real runtime prerequisites named by the SDD for runtime/export work: usable PICO-8 binary discovery, version/capability probe, and Linux headless support such as Xvfb where needed.\n\n## Non-goals\nImplementing runtime_svc itself.\n\n## SDD design slice\nconfig/capability + runtime_svc external surface research from SDD \u00a76.1, \u00a77.7, \u00a77.8, \u00a77.9, \u00a713.\n\n## Behaviors this node must prove\n- bootstrap/pico8-runtime-surface-is-verified-or-blocked\n- bootstrap/headless-linux-support-is-verified-or-blocked\n\n## Tasks\n- [ ] Verify how PICO-8 is discovered in this environment and whether a licensed binary is actually available.\n- [ ] Verify the headless execution path required by the host OS (for example xvfb-run on Linux).\n- [ ] If unavailable, create typed qd blockers for provider/environment prerequisites rather than pretending runtime work is provable.\n- [ ] Terminal: run the real capability discovery/probe commands and capture the resulting evidence or blocker references.\n\n## Real-world dependencies\nDepends on bootstrap-repo-git-gh because host repo context and shell access must be established first.\n\n## Rollback\nN/A; this is research/blocking state.",
+      "acceptance": "The runtime environment facts required by the SDD are verified with real command evidence, or explicit typed blockers exist for missing PICO-8 or headless-host prerequisites before any runtime/export implementation node proceeds.",
+      "verification": [
+        {
+          "type": "command",
+          "value": "which pico8 || true; printf \"%s\n\" \"$PICO8_BIN\"; command -v xvfb-run || true"
+        },
+        {
+          "type": "command",
+          "value": "pnpm dlx @cat-cave/qdcli prompt research"
+        }
+      ],
+      "auditFocus": [
+        "Each verification drives the real code path end-to-end; reject proofs that stub or mock the system under test (mocks allowed only at the SDD-declared adapter boundary).",
+        "Reject tautological, hard-coded, or assert-true checks; every acceptance clause must assert on the scenario's observable Then output.",
+        "Negation check: the proof must FAIL if the behavior is removed or broken. Greenness must depend on the implementation, not on the test's construction.",
+        "Coverage must not be achieved by deleting, weakening, or narrowing a scenario; all listed behaviors are exercised as written.",
+        "Every acceptance clause has real-surface evidence in the completion report; missing or mock-only evidence for a real behavior is a P1 finding, not P3 polish."
+      ]
+    },
+    {
+      "id": "environment-and-capability-detection",
+      "title": "Environment and capability detection",
+      "kind": "feature",
+      "milestone": "platform",
+      "priority": "P0",
+      "risk": "high",
+      "estimatePoints": 3,
+      "spec": "## Objective\nRealize the Environment and capability detection slice described in the SDD so the listed behaviors are true through the real toolbox surface, not just in isolated tests.\n\n## Non-goals\nAny behavior not listed below. Cross-feature workflow automation or convenience recipes are out of scope unless the SDD explicitly requires them.\n\n## SDD design slice\nconfig/capability, runtime_svc, cli_adapter, mcp_adapter.\n\n## Behaviors this node must prove\n- environment-and-capability-detection/capabilities-are-reported-when-pico-8-is-present\n- environment-and-capability-detection/capabilities-are-reported-when-pico-8-is-absent\n- environment-and-capability-detection/static-work-needs-no-pico-8-program\n- environment-and-capability-detection/running-is-declined-when-no-pico-8-program-is-present\n\n## Tasks\n- [ ] Write the failing end-to-end proof for each listed Environment and capability detection scenario against the real surface(s) for environment-and-capability-detection (no mocked SUT).\n- [ ] Implement the environment and capability detection slice across config/capability, runtime_svc, cli_adapter, mcp_adapter until every listed behavior holds as written.\n- [ ] Terminal: run every scenario end-to-end against the real surface and capture the real outputs as evidence for the completion report.\n\n## Real-world dependencies\nDepends on bootstrap-qd-config because repository gates and export configuration must be real before evidence can be trusted. Depends on bootstrap-repo-git-gh because the repo/tooling context must exist.\nDepends on bootstrap-runtime-environment because the PICO-8 binary/headless surface must be verified or blocked before runtime claims are honest.\n\n## Rollback\nRevert this feature slice at the service/front-end boundary while preserving unrelated toolbox capabilities.",
+      "acceptance": "it reports that both static and run capabilities are available it reports that only static capabilities are available it reports that running and exporting are unavailable a valid cartridge the size report is produced successfully a valid cartridge the toolbox declines and explains that no PICO-8 program is installed it does not report the run as successful",
+      "verification": [
+        {
+          "type": "command",
+          "value": "<prove environment-and-capability-detection/capabilities-are-reported-when-pico-8-is-present via real CLI/MCP surface for environment-and-capability-detection>"
+        },
+        {
+          "type": "command",
+          "value": "<prove environment-and-capability-detection/capabilities-are-reported-when-pico-8-is-absent via real CLI/MCP surface for environment-and-capability-detection>"
+        },
+        {
+          "type": "command",
+          "value": "<prove environment-and-capability-detection/static-work-needs-no-pico-8-program via real CLI/MCP surface for environment-and-capability-detection>"
+        },
+        {
+          "type": "command",
+          "value": "<prove environment-and-capability-detection/running-is-declined-when-no-pico-8-program-is-present via real CLI/MCP surface for environment-and-capability-detection>"
+        }
+      ],
+      "auditFocus": [
+        "Each verification drives the real code path end-to-end; reject proofs that stub or mock the system under test (mocks allowed only at the SDD-declared adapter boundary).",
+        "Reject tautological, hard-coded, or assert-true checks; every acceptance clause must assert on the scenario's observable Then output.",
+        "Negation check: the proof must FAIL if the behavior is removed or broken. Greenness must depend on the implementation, not on the test's construction.",
+        "Coverage must not be achieved by deleting, weakening, or narrowing a scenario; all listed behaviors are exercised as written.",
+        "Every acceptance clause has real-surface evidence in the completion report; missing or mock-only evidence for a real behavior is a P1 finding, not P3 polish."
+      ]
+    },
+    {
+      "id": "project-and-path-boundaries",
+      "title": "Project and path boundaries",
+      "kind": "feature",
+      "milestone": "platform",
+      "priority": "P0",
+      "risk": "high",
+      "estimatePoints": 1,
+      "spec": "## Objective\nRealize the Project and path boundaries slice described in the SDD so the listed behaviors are true through the real toolbox surface, not just in isolated tests.\n\n## Non-goals\nAny behavior not listed below. Cross-feature workflow automation or convenience recipes are out of scope unless the SDD explicitly requires them.\n\n## SDD design slice\npath_guard, cart_repo, cli_adapter, mcp_adapter.\n\n## Behaviors this node must prove\n- project-and-path-boundaries/work-outside-the-project-boundary-is-refused\n\n## Tasks\n- [ ] Write the failing end-to-end proof for each listed Project and path boundaries scenario against the real surface(s) for project-and-path-boundaries (no mocked SUT).\n- [ ] Implement the project and path boundaries slice across path_guard, cart_repo, cli_adapter, mcp_adapter until every listed behavior holds as written.\n- [ ] Terminal: run every scenario end-to-end against the real surface and capture the real outputs as evidence for the completion report.\n\n## Real-world dependencies\nDepends on bootstrap-qd-config because repository gates and export configuration must be real before evidence can be trusted. Depends on bootstrap-repo-git-gh because the repo/tooling context must exist.\n\n## Rollback\nRevert this feature slice at the service/front-end boundary while preserving unrelated toolbox capabilities.",
+      "acceptance": "the toolbox refuses and explains the location is outside the project boundary",
+      "verification": [
+        {
+          "type": "command",
+          "value": "<prove project-and-path-boundaries/work-outside-the-project-boundary-is-refused via real CLI/MCP surface for project-and-path-boundaries>"
+        }
+      ],
+      "auditFocus": [
+        "Each verification drives the real code path end-to-end; reject proofs that stub or mock the system under test (mocks allowed only at the SDD-declared adapter boundary).",
+        "Reject tautological, hard-coded, or assert-true checks; every acceptance clause must assert on the scenario's observable Then output.",
+        "Negation check: the proof must FAIL if the behavior is removed or broken. Greenness must depend on the implementation, not on the test's construction.",
+        "Coverage must not be achieved by deleting, weakening, or narrowing a scenario; all listed behaviors are exercised as written.",
+        "Every acceptance clause has real-surface evidence in the completion report; missing or mock-only evidence for a real behavior is a P1 finding, not P3 polish."
+      ]
+    },
+    {
+      "id": "reading-cartridges",
+      "title": "Reading cartridges",
+      "kind": "feature",
+      "milestone": "static-core",
+      "priority": "P0",
+      "risk": "medium",
+      "estimatePoints": 2,
+      "spec": "## Objective\nRealize the Reading cartridges slice described in the SDD so the listed behaviors are true through the real toolbox surface, not just in isolated tests.\n\n## Non-goals\nAny behavior not listed below. Cross-feature workflow automation or convenience recipes are out of scope unless the SDD explicitly requires them.\n\n## SDD design slice\ncart_repo, cli_adapter, mcp_adapter.\n\n## Behaviors this node must prove\n- reading-cartridges/read-an-overview-of-a-cartridge\n- reading-cartridges/read-a-single-tab-of-code\n- reading-cartridges/read-a-cartridge-that-does-not-exist\n- reading-cartridges/read-an-empty-cartridge\n\n## Tasks\n- [ ] Write the failing end-to-end proof for each listed Reading cartridges scenario against the real surface(s) for reading-cartridges (no mocked SUT).\n- [ ] Implement the reading cartridges slice across cart_repo, cli_adapter, mcp_adapter until every listed behavior holds as written.\n- [ ] Terminal: run every scenario end-to-end against the real surface and capture the real outputs as evidence for the completion report.\n\n## Real-world dependencies\nDepends on bootstrap-qd-config because repository gates and export configuration must be real before evidence can be trusted. Depends on bootstrap-repo-git-gh because the repo/tooling context must exist.\n\n## Rollback\nRevert this feature slice at the service/front-end boundary while preserving unrelated toolbox capabilities.",
+      "acceptance": "I receive its code, its size, and a summary of its assets I receive only that tab's code the toolbox reports that the cartridge was not found I receive an empty program and a size of zero",
+      "verification": [
+        {
+          "type": "command",
+          "value": "<prove reading-cartridges/read-an-overview-of-a-cartridge via real CLI/MCP surface for reading-cartridges>"
+        },
+        {
+          "type": "command",
+          "value": "<prove reading-cartridges/read-a-single-tab-of-code via real CLI/MCP surface for reading-cartridges>"
+        },
+        {
+          "type": "command",
+          "value": "<prove reading-cartridges/read-a-cartridge-that-does-not-exist via real CLI/MCP surface for reading-cartridges>"
+        },
+        {
+          "type": "command",
+          "value": "<prove reading-cartridges/read-an-empty-cartridge via real CLI/MCP surface for reading-cartridges>"
+        }
+      ],
+      "auditFocus": [
+        "Each verification drives the real code path end-to-end; reject proofs that stub or mock the system under test (mocks allowed only at the SDD-declared adapter boundary).",
+        "Reject tautological, hard-coded, or assert-true checks; every acceptance clause must assert on the scenario's observable Then output.",
+        "Negation check: the proof must FAIL if the behavior is removed or broken. Greenness must depend on the implementation, not on the test's construction.",
+        "Coverage must not be achieved by deleting, weakening, or narrowing a scenario; all listed behaviors are exercised as written.",
+        "Every acceptance clause has real-surface evidence in the completion report; missing or mock-only evidence for a real behavior is a P1 finding, not P3 polish."
+      ]
+    },
+    {
+      "id": "writing-code",
+      "title": "Writing code",
+      "kind": "feature",
+      "milestone": "static-core",
+      "priority": "P0",
+      "risk": "medium",
+      "estimatePoints": 2,
+      "spec": "## Objective\nRealize the Writing code slice described in the SDD so the listed behaviors are true through the real toolbox surface, not just in isolated tests.\n\n## Non-goals\nAny behavior not listed below. Cross-feature workflow automation or convenience recipes are out of scope unless the SDD explicitly requires them.\n\n## SDD design slice\ncart_repo, static_svc, cli_adapter, mcp_adapter.\n\n## Behaviors this node must prove\n- writing-code/writing-code-to-a-new-location-creates-a-cartridge\n- writing-code/writing-code-preserves-existing-assets\n- writing-code/writing-to-one-tab-leaves-other-tabs-unchanged\n- writing-code/uppercase-identifiers-round-trip-through-the-console-s-own-form\n- writing-code/a-newly-created-cartridge-carries-no-boilerplate\n\n## Tasks\n- [ ] Write the failing end-to-end proof for each listed Writing code scenario against the real surface(s) for writing-code (no mocked SUT).\n- [ ] Implement the writing code slice across cart_repo, static_svc, cli_adapter, mcp_adapter until every listed behavior holds as written.\n- [ ] Terminal: run every scenario end-to-end against the real surface and capture the real outputs as evidence for the completion report.\n\n## Real-world dependencies\nDepends on bootstrap-qd-config because repository gates and export configuration must be real before evidence can be trusted. Depends on bootstrap-repo-git-gh because the repo/tooling context must exist.\nDepends on reading-cartridges where the node consumes the shared Cart load/save contract and on project-and-path-boundaries where it touches filesystem paths.\n\n## Rollback\nRevert this feature slice at the service/front-end boundary while preserving unrelated toolbox capabilities.",
+      "acceptance": "a new cartridge is created containing exactly that code its updated size is reported the code is replaced the sprites and map are unchanged its updated size is reported only that tab changes the code round-trips unchanged the cartridge contains only the code I wrote and no added structure or boilerplate",
+      "verification": [
+        {
+          "type": "command",
+          "value": "<prove writing-code/writing-code-to-a-new-location-creates-a-cartridge via real CLI/MCP surface for writing-code>"
+        },
+        {
+          "type": "command",
+          "value": "<prove writing-code/writing-code-preserves-existing-assets via real CLI/MCP surface for writing-code>"
+        },
+        {
+          "type": "command",
+          "value": "<prove writing-code/writing-to-one-tab-leaves-other-tabs-unchanged via real CLI/MCP surface for writing-code>"
+        },
+        {
+          "type": "command",
+          "value": "<prove writing-code/uppercase-identifiers-round-trip-through-the-console-s-own-form via real CLI/MCP surface for writing-code>"
+        },
+        {
+          "type": "command",
+          "value": "<prove writing-code/a-newly-created-cartridge-carries-no-boilerplate via real CLI/MCP surface for writing-code>"
+        }
+      ],
+      "auditFocus": [
+        "Each verification drives the real code path end-to-end; reject proofs that stub or mock the system under test (mocks allowed only at the SDD-declared adapter boundary).",
+        "Reject tautological, hard-coded, or assert-true checks; every acceptance clause must assert on the scenario's observable Then output.",
+        "Negation check: the proof must FAIL if the behavior is removed or broken. Greenness must depend on the implementation, not on the test's construction.",
+        "Coverage must not be achieved by deleting, weakening, or narrowing a scenario; all listed behaviors are exercised as written.",
+        "Every acceptance clause has real-surface evidence in the completion report; missing or mock-only evidence for a real behavior is a P1 finding, not P3 polish."
+      ]
+    },
+    {
+      "id": "editing-code",
+      "title": "Editing code",
+      "kind": "feature",
+      "milestone": "static-core",
+      "priority": "P1",
+      "risk": "medium",
+      "estimatePoints": 3,
+      "spec": "## Objective\nRealize the Editing code slice described in the SDD so the listed behaviors are true through the real toolbox surface, not just in isolated tests.\n\n## Non-goals\nAny behavior not listed below. Cross-feature workflow automation or convenience recipes are out of scope unless the SDD explicitly requires them.\n\n## SDD design slice\ncart_repo, static_svc, cli_adapter, mcp_adapter.\n\n## Behaviors this node must prove\n- editing-code/edit-a-range-of-lines\n- editing-code/edit-by-finding-and-replacing-text\n- editing-code/append-code-to-a-cartridge\n- editing-code/an-unmatched-search-changes-nothing\n- editing-code/editing-a-tab-that-does-not-exist-is-rejected\n- editing-code/removing-code-increases-the-reported-headroom\n\n## Tasks\n- [ ] Write the failing end-to-end proof for each listed Editing code scenario against the real surface(s) for editing-code (no mocked SUT).\n- [ ] Implement the editing code slice across cart_repo, static_svc, cli_adapter, mcp_adapter until every listed behavior holds as written.\n- [ ] Terminal: run every scenario end-to-end against the real surface and capture the real outputs as evidence for the completion report.\n\n## Real-world dependencies\nDepends on bootstrap-qd-config because repository gates and export configuration must be real before evidence can be trusted. Depends on bootstrap-repo-git-gh because the repo/tooling context must exist.\nDepends on reading-cartridges where the node consumes the shared Cart load/save contract and on project-and-path-boundaries where it touches filesystem paths.\n\n## Rollback\nRevert this feature slice at the service/front-end boundary while preserving unrelated toolbox capabilities.",
+      "acceptance": "only those lines change its updated size is reported the intended occurrences are replaced the new code appears at the end and the rest is unchanged the code is unchanged the toolbox reports that nothing matched the toolbox reports that the tab does not exist the reported headroom against the token limit increases",
+      "verification": [
+        {
+          "type": "command",
+          "value": "<prove editing-code/edit-a-range-of-lines via real CLI/MCP surface for editing-code>"
+        },
+        {
+          "type": "command",
+          "value": "<prove editing-code/edit-by-finding-and-replacing-text via real CLI/MCP surface for editing-code>"
+        },
+        {
+          "type": "command",
+          "value": "<prove editing-code/append-code-to-a-cartridge via real CLI/MCP surface for editing-code>"
+        },
+        {
+          "type": "command",
+          "value": "<prove editing-code/an-unmatched-search-changes-nothing via real CLI/MCP surface for editing-code>"
+        },
+        {
+          "type": "command",
+          "value": "<prove editing-code/editing-a-tab-that-does-not-exist-is-rejected via real CLI/MCP surface for editing-code>"
+        },
+        {
+          "type": "command",
+          "value": "<prove editing-code/removing-code-increases-the-reported-headroom via real CLI/MCP surface for editing-code>"
+        }
+      ],
+      "auditFocus": [
+        "Each verification drives the real code path end-to-end; reject proofs that stub or mock the system under test (mocks allowed only at the SDD-declared adapter boundary).",
+        "Reject tautological, hard-coded, or assert-true checks; every acceptance clause must assert on the scenario's observable Then output.",
+        "Negation check: the proof must FAIL if the behavior is removed or broken. Greenness must depend on the implementation, not on the test's construction.",
+        "Coverage must not be achieved by deleting, weakening, or narrowing a scenario; all listed behaviors are exercised as written.",
+        "Every acceptance clause has real-surface evidence in the completion report; missing or mock-only evidence for a real behavior is a P1 finding, not P3 polish."
+      ]
+    },
+    {
+      "id": "parsing-code",
+      "title": "Parsing code",
+      "kind": "feature",
+      "milestone": "static-core",
+      "priority": "P1",
+      "risk": "medium",
+      "estimatePoints": 2,
+      "spec": "## Objective\nRealize the Parsing code slice described in the SDD so the listed behaviors are true through the real toolbox surface, not just in isolated tests.\n\n## Non-goals\nAny behavior not listed below. Cross-feature workflow automation or convenience recipes are out of scope unless the SDD explicitly requires them.\n\n## SDD design slice\nstatic_svc, cart_repo, cli_adapter, mcp_adapter.\n\n## Behaviors this node must prove\n- parsing-code/valid-code-parses\n- parsing-code/a-syntax-error-is-located\n- parsing-code/the-console-s-shorthand-is-accepted-as-valid\n- parsing-code/an-empty-program-parses\n\n## Tasks\n- [ ] Write the failing end-to-end proof for each listed Parsing code scenario against the real surface(s) for parsing-code (no mocked SUT).\n- [ ] Implement the parsing code slice across static_svc, cart_repo, cli_adapter, mcp_adapter until every listed behavior holds as written.\n- [ ] Terminal: run every scenario end-to-end against the real surface and capture the real outputs as evidence for the completion report.\n\n## Real-world dependencies\nDepends on bootstrap-qd-config because repository gates and export configuration must be real before evidence can be trusted. Depends on bootstrap-repo-git-gh because the repo/tooling context must exist.\nDepends on reading-cartridges where the node consumes the shared Cart load/save contract and on project-and-path-boundaries where it touches filesystem paths.\n\n## Rollback\nRevert this feature slice at the service/front-end boundary while preserving unrelated toolbox capabilities.",
+      "acceptance": "it is reported as parsing with no errors the error is reported with a line and column it is reported as valid it is reported as parsing with no errors",
+      "verification": [
+        {
+          "type": "command",
+          "value": "<prove parsing-code/valid-code-parses via real CLI/MCP surface for parsing-code>"
+        },
+        {
+          "type": "command",
+          "value": "<prove parsing-code/a-syntax-error-is-located via real CLI/MCP surface for parsing-code>"
+        },
+        {
+          "type": "command",
+          "value": "<prove parsing-code/the-console-s-shorthand-is-accepted-as-valid via real CLI/MCP surface for parsing-code>"
+        },
+        {
+          "type": "command",
+          "value": "<prove parsing-code/an-empty-program-parses via real CLI/MCP surface for parsing-code>"
+        }
+      ],
+      "auditFocus": [
+        "Each verification drives the real code path end-to-end; reject proofs that stub or mock the system under test (mocks allowed only at the SDD-declared adapter boundary).",
+        "Reject tautological, hard-coded, or assert-true checks; every acceptance clause must assert on the scenario's observable Then output.",
+        "Negation check: the proof must FAIL if the behavior is removed or broken. Greenness must depend on the implementation, not on the test's construction.",
+        "Coverage must not be achieved by deleting, weakening, or narrowing a scenario; all listed behaviors are exercised as written.",
+        "Every acceptance clause has real-surface evidence in the completion report; missing or mock-only evidence for a real behavior is a P1 finding, not P3 polish."
+      ]
+    },
+    {
+      "id": "linting-code",
+      "title": "Linting code",
+      "kind": "feature",
+      "milestone": "static-core",
+      "priority": "P1",
+      "risk": "medium",
+      "estimatePoints": 1,
+      "spec": "## Objective\nRealize the Linting code slice described in the SDD so the listed behaviors are true through the real toolbox surface, not just in isolated tests.\n\n## Non-goals\nAny behavior not listed below. Cross-feature workflow automation or convenience recipes are out of scope unless the SDD explicitly requires them.\n\n## SDD design slice\nstatic_svc, cart_repo, cli_adapter, mcp_adapter.\n\n## Behaviors this node must prove\n- linting-code/clean-code-produces-no-lints\n- linting-code/lint-reports-likely-problems\n\n## Tasks\n- [ ] Write the failing end-to-end proof for each listed Linting code scenario against the real surface(s) for linting-code (no mocked SUT).\n- [ ] Implement the linting code slice across static_svc, cart_repo, cli_adapter, mcp_adapter until every listed behavior holds as written.\n- [ ] Terminal: run every scenario end-to-end against the real surface and capture the real outputs as evidence for the completion report.\n\n## Real-world dependencies\nDepends on bootstrap-qd-config because repository gates and export configuration must be real before evidence can be trusted. Depends on bootstrap-repo-git-gh because the repo/tooling context must exist.\nDepends on reading-cartridges where the node consumes the shared Cart load/save contract and on project-and-path-boundaries where it touches filesystem paths.\n\n## Rollback\nRevert this feature slice at the service/front-end boundary while preserving unrelated toolbox capabilities.",
+      "acceptance": "no lints are reported a lint about <issue> is reported",
+      "verification": [
+        {
+          "type": "command",
+          "value": "<prove linting-code/clean-code-produces-no-lints via real CLI/MCP surface for linting-code>"
+        },
+        {
+          "type": "command",
+          "value": "<prove linting-code/lint-reports-likely-problems via real CLI/MCP surface for linting-code>"
+        }
+      ],
+      "auditFocus": [
+        "Each verification drives the real code path end-to-end; reject proofs that stub or mock the system under test (mocks allowed only at the SDD-declared adapter boundary).",
+        "Reject tautological, hard-coded, or assert-true checks; every acceptance clause must assert on the scenario's observable Then output.",
+        "Negation check: the proof must FAIL if the behavior is removed or broken. Greenness must depend on the implementation, not on the test's construction.",
+        "Coverage must not be achieved by deleting, weakening, or narrowing a scenario; all listed behaviors are exercised as written.",
+        "Every acceptance clause has real-surface evidence in the completion report; missing or mock-only evidence for a real behavior is a P1 finding, not P3 polish."
+      ]
+    },
+    {
+      "id": "reporting-size-against-the-limits",
+      "title": "Reporting size against the limits",
+      "kind": "feature",
+      "milestone": "static-core",
+      "priority": "P0",
+      "risk": "medium",
+      "estimatePoints": 2,
+      "spec": "## Objective\nRealize the Reporting size against the limits slice described in the SDD so the listed behaviors are true through the real toolbox surface, not just in isolated tests.\n\n## Non-goals\nAny behavior not listed below. Cross-feature workflow automation or convenience recipes are out of scope unless the SDD explicitly requires them.\n\n## SDD design slice\nstatic_svc, cart_repo, cli_adapter, mcp_adapter.\n\n## Behaviors this node must prove\n- reporting-size-against-the-limits/size-within-the-limits-reports-headroom\n- reporting-size-against-the-limits/exceeding-the-token-limit-is-reported\n- reporting-size-against-the-limits/exceeding-the-distribution-size-limit-is-reported\n- reporting-size-against-the-limits/a-static-operation-on-a-missing-cartridge-reports-not-found\n\n## Tasks\n- [ ] Write the failing end-to-end proof for each listed Reporting size against the limits scenario against the real surface(s) for reporting-size-against-the-limits (no mocked SUT).\n- [ ] Implement the reporting size against the limits slice across static_svc, cart_repo, cli_adapter, mcp_adapter until every listed behavior holds as written.\n- [ ] Terminal: run every scenario end-to-end against the real surface and capture the real outputs as evidence for the completion report.\n\n## Real-world dependencies\nDepends on bootstrap-qd-config because repository gates and export configuration must be real before evidence can be trusted. Depends on bootstrap-repo-git-gh because the repo/tooling context must exist.\nDepends on reading-cartridges where the node consumes the shared Cart load/save contract and on project-and-path-boundaries where it touches filesystem paths.\n\n## Rollback\nRevert this feature slice at the service/front-end boundary while preserving unrelated toolbox capabilities.",
+      "acceptance": "I am told its token, character, and compressed sizes I am told it is within the limits I am told it exceeds the token limit I am told it exceeds the distribution size limit the toolbox reports that the cartridge was not found",
+      "verification": [
+        {
+          "type": "command",
+          "value": "<prove reporting-size-against-the-limits/size-within-the-limits-reports-headroom via real CLI/MCP surface for reporting-size-against-the-limits>"
+        },
+        {
+          "type": "command",
+          "value": "<prove reporting-size-against-the-limits/exceeding-the-token-limit-is-reported via real CLI/MCP surface for reporting-size-against-the-limits>"
+        },
+        {
+          "type": "command",
+          "value": "<prove reporting-size-against-the-limits/exceeding-the-distribution-size-limit-is-reported via real CLI/MCP surface for reporting-size-against-the-limits>"
+        },
+        {
+          "type": "command",
+          "value": "<prove reporting-size-against-the-limits/a-static-operation-on-a-missing-cartridge-reports-not-found via real CLI/MCP surface for reporting-size-against-the-limits>"
+        }
+      ],
+      "auditFocus": [
+        "Each verification drives the real code path end-to-end; reject proofs that stub or mock the system under test (mocks allowed only at the SDD-declared adapter boundary).",
+        "Reject tautological, hard-coded, or assert-true checks; every acceptance clause must assert on the scenario's observable Then output.",
+        "Negation check: the proof must FAIL if the behavior is removed or broken. Greenness must depend on the implementation, not on the test's construction.",
+        "Coverage must not be achieved by deleting, weakening, or narrowing a scenario; all listed behaviors are exercised as written.",
+        "Every acceptance clause has real-surface evidence in the completion report; missing or mock-only evidence for a real behavior is a P1 finding, not P3 polish."
+      ]
+    },
+    {
+      "id": "minifying-code",
+      "title": "Minifying code",
+      "kind": "feature",
+      "milestone": "static-advanced",
+      "priority": "P2",
+      "risk": "high",
+      "estimatePoints": 4,
+      "spec": "## Objective\nRealize the Minifying code slice described in the SDD so the listed behaviors are true through the real toolbox surface, not just in isolated tests.\n\n## Non-goals\nAny behavior not listed below. Cross-feature workflow automation or convenience recipes are out of scope unless the SDD explicitly requires them.\n\n## SDD design slice\nstatic_svc, cart_repo, cli_adapter, mcp_adapter.\n\n## Behaviors this node must prove\n- minifying-code/safe-minification-shrinks-the-cart-and-preserves-behaviour\n- minifying-code/aggressive-minification-shrinks-further-than-safe\n- minifying-code/minifying-into-a-separate-cartridge-leaves-the-original-intact\n- minifying-code/minifying-in-place-updates-the-cartridge\n- minifying-code/minification-optimises-the-chosen-measure\n- minifying-code/minification-can-make-an-oversized-cartridge-fit-for-distribution\n- minifying-code/minifying-already-minimal-code-stays-valid\n\n## Tasks\n- [ ] Write the failing end-to-end proof for each listed Minifying code scenario against the real surface(s) for minifying-code (no mocked SUT).\n- [ ] Implement the minifying code slice across static_svc, cart_repo, cli_adapter, mcp_adapter until every listed behavior holds as written.\n- [ ] Terminal: run every scenario end-to-end against the real surface and capture the real outputs as evidence for the completion report.\n\n## Real-world dependencies\nDepends on bootstrap-qd-config because repository gates and export configuration must be real before evidence can be trusted. Depends on bootstrap-repo-git-gh because the repo/tooling context must exist.\nDepends on reading-cartridges where the node consumes the shared Cart load/save contract and on project-and-path-boundaries where it touches filesystem paths.\n\n## Rollback\nRevert this feature slice at the service/front-end boundary while preserving unrelated toolbox capabilities.",
+      "acceptance": "the result is smaller in tokens, characters, and compressed size the program's behaviour is unchanged the before and after sizes are reported the result is smaller than safe minification would produce the original is unchanged and a smaller cartridge is produced the same cartridge is updated with the smaller code <measure> is reduced as much as the tool can manage its compressed code fits within the distribution size limit the result is still valid and no larger than before",
+      "verification": [
+        {
+          "type": "command",
+          "value": "<prove minifying-code/safe-minification-shrinks-the-cart-and-preserves-behaviour via real CLI/MCP surface for minifying-code>"
+        },
+        {
+          "type": "command",
+          "value": "<prove minifying-code/aggressive-minification-shrinks-further-than-safe via real CLI/MCP surface for minifying-code>"
+        },
+        {
+          "type": "command",
+          "value": "<prove minifying-code/minifying-into-a-separate-cartridge-leaves-the-original-intact via real CLI/MCP surface for minifying-code>"
+        },
+        {
+          "type": "command",
+          "value": "<prove minifying-code/minifying-in-place-updates-the-cartridge via real CLI/MCP surface for minifying-code>"
+        },
+        {
+          "type": "command",
+          "value": "<prove minifying-code/minification-optimises-the-chosen-measure via real CLI/MCP surface for minifying-code>"
+        },
+        {
+          "type": "command",
+          "value": "<prove minifying-code/minification-can-make-an-oversized-cartridge-fit-for-distribution via real CLI/MCP surface for minifying-code>"
+        },
+        {
+          "type": "command",
+          "value": "<prove minifying-code/minifying-already-minimal-code-stays-valid via real CLI/MCP surface for minifying-code>"
+        }
+      ],
+      "auditFocus": [
+        "Each verification drives the real code path end-to-end; reject proofs that stub or mock the system under test (mocks allowed only at the SDD-declared adapter boundary).",
+        "Reject tautological, hard-coded, or assert-true checks; every acceptance clause must assert on the scenario's observable Then output.",
+        "Negation check: the proof must FAIL if the behavior is removed or broken. Greenness must depend on the implementation, not on the test's construction.",
+        "Coverage must not be achieved by deleting, weakening, or narrowing a scenario; all listed behaviors are exercised as written.",
+        "Every acceptance clause has real-surface evidence in the completion report; missing or mock-only evidence for a real behavior is a P1 finding, not P3 polish."
+      ]
+    },
+    {
+      "id": "converting-cartridge-formats",
+      "title": "Converting cartridge formats",
+      "kind": "feature",
+      "milestone": "static-advanced",
+      "priority": "P1",
+      "risk": "high",
+      "estimatePoints": 3,
+      "spec": "## Objective\nRealize the Converting cartridge formats slice described in the SDD so the listed behaviors are true through the real toolbox surface, not just in isolated tests.\n\n## Non-goals\nAny behavior not listed below. Cross-feature workflow automation or convenience recipes are out of scope unless the SDD explicitly requires them.\n\n## SDD design slice\ncart_repo, static_svc, cli_adapter, mcp_adapter.\n\n## Behaviors this node must prove\n- converting-cartridge-formats/convert-a-cartridge-between-forms\n- converting-cartridge-formats/a-round-trip-conversion-preserves-the-cartridge\n- converting-cartridge-formats/converting-to-an-image-is-refused-when-the-code-is-too-large\n- converting-cartridge-formats/converting-a-file-that-is-not-a-cartridge-reports-an-error\n\n## Tasks\n- [ ] Write the failing end-to-end proof for each listed Converting cartridge formats scenario against the real surface(s) for converting-cartridge-formats (no mocked SUT).\n- [ ] Implement the converting cartridge formats slice across cart_repo, static_svc, cli_adapter, mcp_adapter until every listed behavior holds as written.\n- [ ] Terminal: run every scenario end-to-end against the real surface and capture the real outputs as evidence for the completion report.\n\n## Real-world dependencies\nDepends on bootstrap-qd-config because repository gates and export configuration must be real before evidence can be trusted. Depends on bootstrap-repo-git-gh because the repo/tooling context must exist.\nDepends on reading-cartridges where the node consumes the shared Cart load/save contract and on project-and-path-boundaries where it touches filesystem paths.\n\n## Rollback\nRevert this feature slice at the service/front-end boundary while preserving unrelated toolbox capabilities.",
+      "acceptance": "a cartridge in <target> form is produced with the same content the cartridge is identical to the original the toolbox declines and explains the code is too large to fit the toolbox reports that the cartridge could not be read",
+      "verification": [
+        {
+          "type": "command",
+          "value": "<prove converting-cartridge-formats/convert-a-cartridge-between-forms via real CLI/MCP surface for converting-cartridge-formats>"
+        },
+        {
+          "type": "command",
+          "value": "<prove converting-cartridge-formats/a-round-trip-conversion-preserves-the-cartridge via real CLI/MCP surface for converting-cartridge-formats>"
+        },
+        {
+          "type": "command",
+          "value": "<prove converting-cartridge-formats/converting-to-an-image-is-refused-when-the-code-is-too-large via real CLI/MCP surface for converting-cartridge-formats>"
+        },
+        {
+          "type": "command",
+          "value": "<prove converting-cartridge-formats/converting-a-file-that-is-not-a-cartridge-reports-an-error via real CLI/MCP surface for converting-cartridge-formats>"
+        }
+      ],
+      "auditFocus": [
+        "Each verification drives the real code path end-to-end; reject proofs that stub or mock the system under test (mocks allowed only at the SDD-declared adapter boundary).",
+        "Reject tautological, hard-coded, or assert-true checks; every acceptance clause must assert on the scenario's observable Then output.",
+        "Negation check: the proof must FAIL if the behavior is removed or broken. Greenness must depend on the implementation, not on the test's construction.",
+        "Coverage must not be achieved by deleting, weakening, or narrowing a scenario; all listed behaviors are exercised as written.",
+        "Every acceptance clause has real-surface evidence in the completion report; missing or mock-only evidence for a real behavior is a P1 finding, not P3 polish."
+      ]
+    },
+    {
+      "id": "editing-sprites",
+      "title": "Editing sprites",
+      "kind": "feature",
+      "milestone": "assets",
+      "priority": "P1",
+      "risk": "medium",
+      "estimatePoints": 2,
+      "spec": "## Objective\nRealize the Editing sprites slice described in the SDD so the listed behaviors are true through the real toolbox surface, not just in isolated tests.\n\n## Non-goals\nAny behavior not listed below. Cross-feature workflow automation or convenience recipes are out of scope unless the SDD explicitly requires them.\n\n## SDD design slice\nasset_svc, cart_repo, cli_adapter, mcp_adapter.\n\n## Behaviors this node must prove\n- editing-sprites/read-a-sprite-as-a-grid-of-colours\n- editing-sprites/write-a-sprite-from-a-grid\n- editing-sprites/write-a-sprite-together-with-its-flags\n- editing-sprites/reject-a-colour-outside-the-palette\n- editing-sprites/reject-a-wrongly-sized-sprite-grid\n\n## Tasks\n- [ ] Write the failing end-to-end proof for each listed Editing sprites scenario against the real surface(s) for editing-sprites (no mocked SUT).\n- [ ] Implement the editing sprites slice across asset_svc, cart_repo, cli_adapter, mcp_adapter until every listed behavior holds as written.\n- [ ] Terminal: run every scenario end-to-end against the real surface and capture the real outputs as evidence for the completion report.\n\n## Real-world dependencies\nDepends on bootstrap-qd-config because repository gates and export configuration must be real before evidence can be trusted. Depends on bootstrap-repo-git-gh because the repo/tooling context must exist.\nDepends on reading-cartridges where the node consumes the shared Cart load/save contract and on project-and-path-boundaries where it touches filesystem paths.\n\n## Rollback\nRevert this feature slice at the service/front-end boundary while preserving unrelated toolbox capabilities.",
+      "acceptance": "I receive an 8\u00d78 grid of colour values the sprite matches the grid I provided both the sprite and its flags are updated the toolbox rejects the grid as invalid the toolbox rejects the grid as the wrong size",
+      "verification": [
+        {
+          "type": "command",
+          "value": "<prove editing-sprites/read-a-sprite-as-a-grid-of-colours via real CLI/MCP surface for editing-sprites>"
+        },
+        {
+          "type": "command",
+          "value": "<prove editing-sprites/write-a-sprite-from-a-grid via real CLI/MCP surface for editing-sprites>"
+        },
+        {
+          "type": "command",
+          "value": "<prove editing-sprites/write-a-sprite-together-with-its-flags via real CLI/MCP surface for editing-sprites>"
+        },
+        {
+          "type": "command",
+          "value": "<prove editing-sprites/reject-a-colour-outside-the-palette via real CLI/MCP surface for editing-sprites>"
+        },
+        {
+          "type": "command",
+          "value": "<prove editing-sprites/reject-a-wrongly-sized-sprite-grid via real CLI/MCP surface for editing-sprites>"
+        }
+      ],
+      "auditFocus": [
+        "Each verification drives the real code path end-to-end; reject proofs that stub or mock the system under test (mocks allowed only at the SDD-declared adapter boundary).",
+        "Reject tautological, hard-coded, or assert-true checks; every acceptance clause must assert on the scenario's observable Then output.",
+        "Negation check: the proof must FAIL if the behavior is removed or broken. Greenness must depend on the implementation, not on the test's construction.",
+        "Coverage must not be achieved by deleting, weakening, or narrowing a scenario; all listed behaviors are exercised as written.",
+        "Every acceptance clause has real-surface evidence in the completion report; missing or mock-only evidence for a real behavior is a P1 finding, not P3 polish."
+      ]
+    },
+    {
+      "id": "editing-sprite-flags",
+      "title": "Editing sprite flags",
+      "kind": "feature",
+      "milestone": "assets",
+      "priority": "P1",
+      "risk": "low",
+      "estimatePoints": 1,
+      "spec": "## Objective\nRealize the Editing sprite flags slice described in the SDD so the listed behaviors are true through the real toolbox surface, not just in isolated tests.\n\n## Non-goals\nAny behavior not listed below. Cross-feature workflow automation or convenience recipes are out of scope unless the SDD explicitly requires them.\n\n## SDD design slice\nasset_svc, cart_repo, cli_adapter, mcp_adapter.\n\n## Behaviors this node must prove\n- editing-sprite-flags/set-a-sprite-s-flags\n\n## Tasks\n- [ ] Write the failing end-to-end proof for each listed Editing sprite flags scenario against the real surface(s) for editing-sprite-flags (no mocked SUT).\n- [ ] Implement the editing sprite flags slice across asset_svc, cart_repo, cli_adapter, mcp_adapter until every listed behavior holds as written.\n- [ ] Terminal: run every scenario end-to-end against the real surface and capture the real outputs as evidence for the completion report.\n\n## Real-world dependencies\nDepends on bootstrap-qd-config because repository gates and export configuration must be real before evidence can be trusted. Depends on bootstrap-repo-git-gh because the repo/tooling context must exist.\nDepends on reading-cartridges where the node consumes the shared Cart load/save contract and on project-and-path-boundaries where it touches filesystem paths.\n\n## Rollback\nRevert this feature slice at the service/front-end boundary while preserving unrelated toolbox capabilities.",
+      "acceptance": "those flags are recorded for the sprite",
+      "verification": [
+        {
+          "type": "command",
+          "value": "<prove editing-sprite-flags/set-a-sprite-s-flags via real CLI/MCP surface for editing-sprite-flags>"
+        }
+      ],
+      "auditFocus": [
+        "Each verification drives the real code path end-to-end; reject proofs that stub or mock the system under test (mocks allowed only at the SDD-declared adapter boundary).",
+        "Reject tautological, hard-coded, or assert-true checks; every acceptance clause must assert on the scenario's observable Then output.",
+        "Negation check: the proof must FAIL if the behavior is removed or broken. Greenness must depend on the implementation, not on the test's construction.",
+        "Coverage must not be achieved by deleting, weakening, or narrowing a scenario; all listed behaviors are exercised as written.",
+        "Every acceptance clause has real-surface evidence in the completion report; missing or mock-only evidence for a real behavior is a P1 finding, not P3 polish."
+      ]
+    },
+    {
+      "id": "editing-the-map",
+      "title": "Editing the map",
+      "kind": "feature",
+      "milestone": "assets",
+      "priority": "P1",
+      "risk": "medium",
+      "estimatePoints": 2,
+      "spec": "## Objective\nRealize the Editing the map slice described in the SDD so the listed behaviors are true through the real toolbox surface, not just in isolated tests.\n\n## Non-goals\nAny behavior not listed below. Cross-feature workflow automation or convenience recipes are out of scope unless the SDD explicitly requires them.\n\n## SDD design slice\nasset_svc, cart_repo, cli_adapter, mcp_adapter.\n\n## Behaviors this node must prove\n- editing-the-map/read-a-region-of-the-map\n- editing-the-map/paint-a-region-of-the-map\n- editing-the-map/reject-a-tile-value-out-of-range\n- editing-the-map/reject-a-region-beyond-the-map-bounds\n\n## Tasks\n- [ ] Write the failing end-to-end proof for each listed Editing the map scenario against the real surface(s) for editing-the-map (no mocked SUT).\n- [ ] Implement the editing the map slice across asset_svc, cart_repo, cli_adapter, mcp_adapter until every listed behavior holds as written.\n- [ ] Terminal: run every scenario end-to-end against the real surface and capture the real outputs as evidence for the completion report.\n\n## Real-world dependencies\nDepends on bootstrap-qd-config because repository gates and export configuration must be real before evidence can be trusted. Depends on bootstrap-repo-git-gh because the repo/tooling context must exist.\nDepends on reading-cartridges where the node consumes the shared Cart load/save contract and on project-and-path-boundaries where it touches filesystem paths.\n\n## Rollback\nRevert this feature slice at the service/front-end boundary while preserving unrelated toolbox capabilities.",
+      "acceptance": "I receive a grid of tile values for that region that region matches the grid I provided the toolbox rejects the grid as invalid the toolbox rejects the request as out of bounds",
+      "verification": [
+        {
+          "type": "command",
+          "value": "<prove editing-the-map/read-a-region-of-the-map via real CLI/MCP surface for editing-the-map>"
+        },
+        {
+          "type": "command",
+          "value": "<prove editing-the-map/paint-a-region-of-the-map via real CLI/MCP surface for editing-the-map>"
+        },
+        {
+          "type": "command",
+          "value": "<prove editing-the-map/reject-a-tile-value-out-of-range via real CLI/MCP surface for editing-the-map>"
+        },
+        {
+          "type": "command",
+          "value": "<prove editing-the-map/reject-a-region-beyond-the-map-bounds via real CLI/MCP surface for editing-the-map>"
+        }
+      ],
+      "auditFocus": [
+        "Each verification drives the real code path end-to-end; reject proofs that stub or mock the system under test (mocks allowed only at the SDD-declared adapter boundary).",
+        "Reject tautological, hard-coded, or assert-true checks; every acceptance clause must assert on the scenario's observable Then output.",
+        "Negation check: the proof must FAIL if the behavior is removed or broken. Greenness must depend on the implementation, not on the test's construction.",
+        "Coverage must not be achieved by deleting, weakening, or narrowing a scenario; all listed behaviors are exercised as written.",
+        "Every acceptance clause has real-surface evidence in the completion report; missing or mock-only evidence for a real behavior is a P1 finding, not P3 polish."
+      ]
+    },
+    {
+      "id": "sprite-sheet-images",
+      "title": "Sprite sheet images",
+      "kind": "feature",
+      "milestone": "assets",
+      "priority": "P2",
+      "risk": "medium",
+      "estimatePoints": 2,
+      "spec": "## Objective\nRealize the Sprite sheet images slice described in the SDD so the listed behaviors are true through the real toolbox surface, not just in isolated tests.\n\n## Non-goals\nAny behavior not listed below. Cross-feature workflow automation or convenience recipes are out of scope unless the SDD explicitly requires them.\n\n## SDD design slice\nasset_svc, cart_repo, cli_adapter, mcp_adapter.\n\n## Behaviors this node must prove\n- sprite-sheet-images/import-an-image-into-the-sprite-sheet\n- sprite-sheet-images/import-an-image-at-a-chosen-position\n- sprite-sheet-images/import-an-oversized-image-with-shrinking\n- sprite-sheet-images/export-the-sprite-sheet-as-an-image\n\n## Tasks\n- [ ] Write the failing end-to-end proof for each listed Sprite sheet images scenario against the real surface(s) for sprite-sheet-images (no mocked SUT).\n- [ ] Implement the sprite sheet images slice across asset_svc, cart_repo, cli_adapter, mcp_adapter until every listed behavior holds as written.\n- [ ] Terminal: run every scenario end-to-end against the real surface and capture the real outputs as evidence for the completion report.\n\n## Real-world dependencies\nDepends on bootstrap-qd-config because repository gates and export configuration must be real before evidence can be trusted. Depends on bootstrap-repo-git-gh because the repo/tooling context must exist.\nDepends on reading-cartridges where the node consumes the shared Cart load/save contract and on project-and-path-boundaries where it touches filesystem paths.\n\n## Rollback\nRevert this feature slice at the service/front-end boundary while preserving unrelated toolbox capabilities.",
+      "acceptance": "the sprite sheet reflects the image with its colours fitted to the palette the image appears at that position it is scaled down to fit the sprite sheet an image of the sprite sheet is produced",
+      "verification": [
+        {
+          "type": "command",
+          "value": "<prove sprite-sheet-images/import-an-image-into-the-sprite-sheet via real CLI/MCP surface for sprite-sheet-images>"
+        },
+        {
+          "type": "command",
+          "value": "<prove sprite-sheet-images/import-an-image-at-a-chosen-position via real CLI/MCP surface for sprite-sheet-images>"
+        },
+        {
+          "type": "command",
+          "value": "<prove sprite-sheet-images/import-an-oversized-image-with-shrinking via real CLI/MCP surface for sprite-sheet-images>"
+        },
+        {
+          "type": "command",
+          "value": "<prove sprite-sheet-images/export-the-sprite-sheet-as-an-image via real CLI/MCP surface for sprite-sheet-images>"
+        }
+      ],
+      "auditFocus": [
+        "Each verification drives the real code path end-to-end; reject proofs that stub or mock the system under test (mocks allowed only at the SDD-declared adapter boundary).",
+        "Reject tautological, hard-coded, or assert-true checks; every acceptance clause must assert on the scenario's observable Then output.",
+        "Negation check: the proof must FAIL if the behavior is removed or broken. Greenness must depend on the implementation, not on the test's construction.",
+        "Coverage must not be achieved by deleting, weakening, or narrowing a scenario; all listed behaviors are exercised as written.",
+        "Every acceptance clause has real-surface evidence in the completion report; missing or mock-only evidence for a real behavior is a P1 finding, not P3 polish."
+      ]
+    },
+    {
+      "id": "editing-sound-effects",
+      "title": "Editing sound effects",
+      "kind": "feature",
+      "milestone": "assets",
+      "priority": "P2",
+      "risk": "medium",
+      "estimatePoints": 1,
+      "spec": "## Objective\nRealize the Editing sound effects slice described in the SDD so the listed behaviors are true through the real toolbox surface, not just in isolated tests.\n\n## Non-goals\nAny behavior not listed below. Cross-feature workflow automation or convenience recipes are out of scope unless the SDD explicitly requires them.\n\n## SDD design slice\nasset_svc, cart_repo, cli_adapter, mcp_adapter.\n\n## Behaviors this node must prove\n- editing-sound-effects/read-a-sound-effect-as-notes\n- editing-sound-effects/write-a-sound-effect-from-notes\n\n## Tasks\n- [ ] Write the failing end-to-end proof for each listed Editing sound effects scenario against the real surface(s) for editing-sound-effects (no mocked SUT).\n- [ ] Implement the editing sound effects slice across asset_svc, cart_repo, cli_adapter, mcp_adapter until every listed behavior holds as written.\n- [ ] Terminal: run every scenario end-to-end against the real surface and capture the real outputs as evidence for the completion report.\n\n## Real-world dependencies\nDepends on bootstrap-qd-config because repository gates and export configuration must be real before evidence can be trusted. Depends on bootstrap-repo-git-gh because the repo/tooling context must exist.\nDepends on reading-cartridges where the node consumes the shared Cart load/save contract and on project-and-path-boundaries where it touches filesystem paths.\n\n## Rollback\nRevert this feature slice at the service/front-end boundary while preserving unrelated toolbox capabilities.",
+      "acceptance": "I receive its notes in a structured form the sound effect matches the notes I provided",
+      "verification": [
+        {
+          "type": "command",
+          "value": "<prove editing-sound-effects/read-a-sound-effect-as-notes via real CLI/MCP surface for editing-sound-effects>"
+        },
+        {
+          "type": "command",
+          "value": "<prove editing-sound-effects/write-a-sound-effect-from-notes via real CLI/MCP surface for editing-sound-effects>"
+        }
+      ],
+      "auditFocus": [
+        "Each verification drives the real code path end-to-end; reject proofs that stub or mock the system under test (mocks allowed only at the SDD-declared adapter boundary).",
+        "Reject tautological, hard-coded, or assert-true checks; every acceptance clause must assert on the scenario's observable Then output.",
+        "Negation check: the proof must FAIL if the behavior is removed or broken. Greenness must depend on the implementation, not on the test's construction.",
+        "Coverage must not be achieved by deleting, weakening, or narrowing a scenario; all listed behaviors are exercised as written.",
+        "Every acceptance clause has real-surface evidence in the completion report; missing or mock-only evidence for a real behavior is a P1 finding, not P3 polish."
+      ]
+    },
+    {
+      "id": "running-a-cartridge-headlessly",
+      "title": "Running a cartridge headlessly",
+      "kind": "feature",
+      "milestone": "runtime",
+      "priority": "P0",
+      "risk": "high",
+      "estimatePoints": 7,
+      "spec": "## Objective\nRealize the Running a cartridge headlessly slice described in the SDD so the listed behaviors are true through the real toolbox surface, not just in isolated tests.\n\n## Non-goals\nAny behavior not listed below. Cross-feature workflow automation or convenience recipes are out of scope unless the SDD explicitly requires them.\n\n## SDD design slice\nruntime_svc, config/capability, cart_repo, cli_adapter, mcp_adapter.\n\n## Behaviors this node must prove\n- running-a-cartridge-headlessly/run-and-capture-a-still-image\n- running-a-cartridge-headlessly/run-and-capture-an-animation\n- running-a-cartridge-headlessly/run-for-telemetry-only\n- running-a-cartridge-headlessly/a-runtime-error-is-reported-with-its-location\n- running-a-cartridge-headlessly/scripted-input-drives-the-run\n- running-a-cartridge-headlessly/runs-with-the-same-script-are-reproducible\n- running-a-cartridge-headlessly/traced-values-appear-in-the-run-output\n- running-a-cartridge-headlessly/capture-the-screen-at-a-chosen-frame\n- running-a-cartridge-headlessly/a-non-terminating-cartridge-is-stopped\n- running-a-cartridge-headlessly/performance-of-a-run-is-reported\n- running-a-cartridge-headlessly/code-from-every-tab-takes-effect-when-run\n- running-a-cartridge-headlessly/a-run-cannot-alter-files-outside-its-isolated-workspace\n\n## Tasks\n- [ ] Write the failing end-to-end proof for each listed Running a cartridge headlessly scenario against the real surface(s) for running-a-cartridge-headlessly (no mocked SUT).\n- [ ] Implement the running a cartridge headlessly slice across runtime_svc, config/capability, cart_repo, cli_adapter, mcp_adapter until every listed behavior holds as written.\n- [ ] Terminal: run every scenario end-to-end against the real surface and capture the real outputs as evidence for the completion report.\n\n## Real-world dependencies\nDepends on bootstrap-qd-config because repository gates and export configuration must be real before evidence can be trusted. Depends on bootstrap-repo-git-gh because the repo/tooling context must exist.\nDepends on bootstrap-runtime-environment because the PICO-8 binary/headless surface must be verified or blocked before runtime claims are honest.\n\n## Rollback\nRevert this feature slice at the service/front-end boundary while preserving unrelated toolbox capabilities.",
+      "acceptance": "a cartridge that draws to the screen I receive an image of the screen no runtime error is reported a cartridge that draws to the screen I receive an animated capture of the run a cartridge I receive its telemetry and performance but no image a cartridge that fails while running the runtime error is reported with a message and a location any output produced before the failure is returned a cartridge that responds to button presses the outcome reflects those presses a cartridge that responds to button presses both runs produce the same outcome a running cartridge those values appear in the run's output a cartridge whose screen changes over time the captured image is of that frame a cartridge that never finishes on its own the run stops at its time limit whatever was captured before stopping is returned the run is reported as having timed out a cartridge with a heavy drawing routine the peak and average per-frame processing load are reported a cartridge whose code spans several tabs code from every tab takes effect a cartridge that attempts to write files to the host files outside the run's isolated workspace are left untouched",
+      "verification": [
+        {
+          "type": "command",
+          "value": "<prove running-a-cartridge-headlessly/run-and-capture-a-still-image via real CLI/MCP surface for running-a-cartridge-headlessly>"
+        },
+        {
+          "type": "command",
+          "value": "<prove running-a-cartridge-headlessly/run-and-capture-an-animation via real CLI/MCP surface for running-a-cartridge-headlessly>"
+        },
+        {
+          "type": "command",
+          "value": "<prove running-a-cartridge-headlessly/run-for-telemetry-only via real CLI/MCP surface for running-a-cartridge-headlessly>"
+        },
+        {
+          "type": "command",
+          "value": "<prove running-a-cartridge-headlessly/a-runtime-error-is-reported-with-its-location via real CLI/MCP surface for running-a-cartridge-headlessly>"
+        },
+        {
+          "type": "command",
+          "value": "<prove running-a-cartridge-headlessly/scripted-input-drives-the-run via real CLI/MCP surface for running-a-cartridge-headlessly>"
+        },
+        {
+          "type": "command",
+          "value": "<prove running-a-cartridge-headlessly/runs-with-the-same-script-are-reproducible via real CLI/MCP surface for running-a-cartridge-headlessly>"
+        },
+        {
+          "type": "command",
+          "value": "<prove running-a-cartridge-headlessly/traced-values-appear-in-the-run-output via real CLI/MCP surface for running-a-cartridge-headlessly>"
+        },
+        {
+          "type": "command",
+          "value": "<prove running-a-cartridge-headlessly/capture-the-screen-at-a-chosen-frame via real CLI/MCP surface for running-a-cartridge-headlessly>"
+        },
+        {
+          "type": "command",
+          "value": "<prove running-a-cartridge-headlessly/a-non-terminating-cartridge-is-stopped via real CLI/MCP surface for running-a-cartridge-headlessly>"
+        },
+        {
+          "type": "command",
+          "value": "<prove running-a-cartridge-headlessly/performance-of-a-run-is-reported via real CLI/MCP surface for running-a-cartridge-headlessly>"
+        },
+        {
+          "type": "command",
+          "value": "<prove running-a-cartridge-headlessly/code-from-every-tab-takes-effect-when-run via real CLI/MCP surface for running-a-cartridge-headlessly>"
+        },
+        {
+          "type": "command",
+          "value": "<prove running-a-cartridge-headlessly/a-run-cannot-alter-files-outside-its-isolated-workspace via real CLI/MCP surface for running-a-cartridge-headlessly>"
+        }
+      ],
+      "auditFocus": [
+        "Each verification drives the real code path end-to-end; reject proofs that stub or mock the system under test (mocks allowed only at the SDD-declared adapter boundary).",
+        "Reject tautological, hard-coded, or assert-true checks; every acceptance clause must assert on the scenario's observable Then output.",
+        "Negation check: the proof must FAIL if the behavior is removed or broken. Greenness must depend on the implementation, not on the test's construction.",
+        "Coverage must not be achieved by deleting, weakening, or narrowing a scenario; all listed behaviors are exercised as written.",
+        "Every acceptance clause has real-surface evidence in the completion report; missing or mock-only evidence for a real behavior is a P1 finding, not P3 polish."
+      ]
+    },
+    {
+      "id": "exporting-a-distributable",
+      "title": "Exporting a distributable",
+      "kind": "feature",
+      "milestone": "runtime",
+      "priority": "P1",
+      "risk": "high",
+      "estimatePoints": 3,
+      "spec": "## Objective\nRealize the Exporting a distributable slice described in the SDD so the listed behaviors are true through the real toolbox surface, not just in isolated tests.\n\n## Non-goals\nAny behavior not listed below. Cross-feature workflow automation or convenience recipes are out of scope unless the SDD explicitly requires them.\n\n## SDD design slice\nruntime_svc, config/capability, cart_repo, cli_adapter, mcp_adapter.\n\n## Behaviors this node must prove\n- exporting-a-distributable/export-a-web-build\n- exporting-a-distributable/export-a-native-build\n- exporting-a-distributable/bundle-extra-cartridges-into-a-build\n- exporting-a-distributable/use-a-sprite-as-the-build-icon\n- exporting-a-distributable/exporting-is-declined-when-no-pico-8-program-is-present\n\n## Tasks\n- [ ] Write the failing end-to-end proof for each listed Exporting a distributable scenario against the real surface(s) for exporting-a-distributable (no mocked SUT).\n- [ ] Implement the exporting a distributable slice across runtime_svc, config/capability, cart_repo, cli_adapter, mcp_adapter until every listed behavior holds as written.\n- [ ] Terminal: run every scenario end-to-end against the real surface and capture the real outputs as evidence for the completion report.\n\n## Real-world dependencies\nDepends on bootstrap-qd-config because repository gates and export configuration must be real before evidence can be trusted. Depends on bootstrap-repo-git-gh because the repo/tooling context must exist.\nDepends on bootstrap-runtime-environment because the PICO-8 binary/headless surface must be verified or blocked before runtime claims are honest.\n\n## Rollback\nRevert this feature slice at the service/front-end boundary while preserving unrelated toolbox capabilities.",
+      "acceptance": "a cartridge a web build is produced a cartridge a native application is produced a cartridge and additional cartridges to bundle with it the additional cartridges are available within the build a cartridge with a suitable sprite the build uses that icon a cartridge the toolbox declines and explains that no PICO-8 program is installed",
+      "verification": [
+        {
+          "type": "command",
+          "value": "<prove exporting-a-distributable/export-a-web-build via real CLI/MCP surface for exporting-a-distributable>"
+        },
+        {
+          "type": "command",
+          "value": "<prove exporting-a-distributable/export-a-native-build via real CLI/MCP surface for exporting-a-distributable>"
+        },
+        {
+          "type": "command",
+          "value": "<prove exporting-a-distributable/bundle-extra-cartridges-into-a-build via real CLI/MCP surface for exporting-a-distributable>"
+        },
+        {
+          "type": "command",
+          "value": "<prove exporting-a-distributable/use-a-sprite-as-the-build-icon via real CLI/MCP surface for exporting-a-distributable>"
+        },
+        {
+          "type": "command",
+          "value": "<prove exporting-a-distributable/exporting-is-declined-when-no-pico-8-program-is-present via real CLI/MCP surface for exporting-a-distributable>"
+        }
+      ],
+      "auditFocus": [
+        "Each verification drives the real code path end-to-end; reject proofs that stub or mock the system under test (mocks allowed only at the SDD-declared adapter boundary).",
+        "Reject tautological, hard-coded, or assert-true checks; every acceptance clause must assert on the scenario's observable Then output.",
+        "Negation check: the proof must FAIL if the behavior is removed or broken. Greenness must depend on the implementation, not on the test's construction.",
+        "Coverage must not be achieved by deleting, weakening, or narrowing a scenario; all listed behaviors are exercised as written.",
+        "Every acceptance clause has real-surface evidence in the completion report; missing or mock-only evidence for a real behavior is a P1 finding, not P3 polish."
+      ]
+    },
+    {
+      "id": "reference-data",
+      "title": "Reference data",
+      "kind": "feature",
+      "milestone": "reference",
+      "priority": "P2",
+      "risk": "low",
+      "estimatePoints": 2,
+      "spec": "## Objective\nRealize the Reference data slice described in the SDD so the listed behaviors are true through the real toolbox surface, not just in isolated tests.\n\n## Non-goals\nAny behavior not listed below. Cross-feature workflow automation or convenience recipes are out of scope unless the SDD explicitly requires them.\n\n## SDD design slice\nref_svc, cart_repo, cli_adapter, mcp_adapter.\n\n## Behaviors this node must prove\n- reference-data/retrieve-the-function-reference\n- reference-data/retrieve-the-guide-to-the-console-s-pitfalls\n- reference-data/a-cartridge-snapshot-matches-reading-it-directly\n- reference-data/reference-data-is-passive\n\n## Tasks\n- [ ] Write the failing end-to-end proof for each listed Reference data scenario against the real surface(s) for reference-data (no mocked SUT).\n- [ ] Implement the reference data slice across ref_svc, cart_repo, cli_adapter, mcp_adapter until every listed behavior holds as written.\n- [ ] Terminal: run every scenario end-to-end against the real surface and capture the real outputs as evidence for the completion report.\n\n## Real-world dependencies\nDepends on bootstrap-qd-config because repository gates and export configuration must be real before evidence can be trusted. Depends on bootstrap-repo-git-gh because the repo/tooling context must exist.\nDepends on reading-cartridges where the node consumes the shared Cart load/save contract and on project-and-path-boundaries where it touches filesystem paths.\n\n## Rollback\nRevert this feature slice at the service/front-end boundary while preserving unrelated toolbox capabilities.",
+      "acceptance": "I receive an index of functions with a short description of each I receive its notable quirks and constraints it matches what reading the cartridge directly would return no cartridge is modified and nothing is run",
+      "verification": [
+        {
+          "type": "command",
+          "value": "<prove reference-data/retrieve-the-function-reference via real CLI/MCP surface for reference-data>"
+        },
+        {
+          "type": "command",
+          "value": "<prove reference-data/retrieve-the-guide-to-the-console-s-pitfalls via real CLI/MCP surface for reference-data>"
+        },
+        {
+          "type": "command",
+          "value": "<prove reference-data/a-cartridge-snapshot-matches-reading-it-directly via real CLI/MCP surface for reference-data>"
+        },
+        {
+          "type": "command",
+          "value": "<prove reference-data/reference-data-is-passive via real CLI/MCP surface for reference-data>"
+        }
+      ],
+      "auditFocus": [
+        "Each verification drives the real code path end-to-end; reject proofs that stub or mock the system under test (mocks allowed only at the SDD-declared adapter boundary).",
+        "Reject tautological, hard-coded, or assert-true checks; every acceptance clause must assert on the scenario's observable Then output.",
+        "Negation check: the proof must FAIL if the behavior is removed or broken. Greenness must depend on the implementation, not on the test's construction.",
+        "Coverage must not be achieved by deleting, weakening, or narrowing a scenario; all listed behaviors are exercised as written.",
+        "Every acceptance clause has real-surface evidence in the completion report; missing or mock-only evidence for a real behavior is a P1 finding, not P3 polish."
+      ]
+    },
+    {
+      "id": "toolbox-contract",
+      "title": "Toolbox contract",
+      "kind": "feature",
+      "milestone": "platform",
+      "priority": "P0",
+      "risk": "medium",
+      "estimatePoints": 2,
+      "spec": "## Objective\nRealize the Toolbox contract slice described in the SDD so the listed behaviors are true through the real toolbox surface, not just in isolated tests.\n\n## Non-goals\nAny behavior not listed below. Cross-feature workflow automation or convenience recipes are out of scope unless the SDD explicitly requires them.\n\n## SDD design slice\ncli_adapter, mcp_adapter, static_svc, runtime_svc, asset_svc, ref_svc.\n\n## Behaviors this node must prove\n- toolbox-contract/operations-do-not-trigger-one-another\n- toolbox-contract/exceeding-the-token-limit-does-not-block-an-editable-form-write\n- toolbox-contract/each-operation-stands-alone\n- toolbox-contract/the-toolbox-offers-only-single-purpose-operations\n\n## Tasks\n- [ ] Write the failing end-to-end proof for each listed Toolbox contract scenario against the real surface(s) for toolbox-contract (no mocked SUT).\n- [ ] Implement the toolbox contract slice across cli_adapter, mcp_adapter, static_svc, runtime_svc, asset_svc, ref_svc until every listed behavior holds as written.\n- [ ] Terminal: run every scenario end-to-end against the real surface and capture the real outputs as evidence for the completion report.\n\n## Real-world dependencies\nDepends on bootstrap-qd-config because repository gates and export configuration must be real before evidence can be trusted. Depends on bootstrap-repo-git-gh because the repo/tooling context must exist.\nDepends on reading-cartridges where the node consumes the shared Cart load/save contract and on project-and-path-boundaries where it touches filesystem paths.\n\n## Rollback\nRevert this feature slice at the service/front-end boundary while preserving unrelated toolbox capabilities.",
+      "acceptance": "the code is not automatically linted, run, or minified the write succeeds I am informed that the code exceeds the token limit it completes without requiring any other operation to have run first they are all single-purpose there are no project templates, boilerplate, or multi-step recipes",
+      "verification": [
+        {
+          "type": "command",
+          "value": "<prove toolbox-contract/operations-do-not-trigger-one-another via real CLI/MCP surface for toolbox-contract>"
+        },
+        {
+          "type": "command",
+          "value": "<prove toolbox-contract/exceeding-the-token-limit-does-not-block-an-editable-form-write via real CLI/MCP surface for toolbox-contract>"
+        },
+        {
+          "type": "command",
+          "value": "<prove toolbox-contract/each-operation-stands-alone via real CLI/MCP surface for toolbox-contract>"
+        },
+        {
+          "type": "command",
+          "value": "<prove toolbox-contract/the-toolbox-offers-only-single-purpose-operations via real CLI/MCP surface for toolbox-contract>"
+        }
+      ],
+      "auditFocus": [
+        "Each verification drives the real code path end-to-end; reject proofs that stub or mock the system under test (mocks allowed only at the SDD-declared adapter boundary).",
+        "Reject tautological, hard-coded, or assert-true checks; every acceptance clause must assert on the scenario's observable Then output.",
+        "Negation check: the proof must FAIL if the behavior is removed or broken. Greenness must depend on the implementation, not on the test's construction.",
+        "Coverage must not be achieved by deleting, weakening, or narrowing a scenario; all listed behaviors are exercised as written.",
+        "Every acceptance clause has real-surface evidence in the completion report; missing or mock-only evidence for a real behavior is a P1 finding, not P3 polish."
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "from": "bootstrap-repo-git-gh",
+      "to": "bootstrap-qd-config",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-repo-git-gh",
+      "to": "bootstrap-runtime-environment",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-repo-git-gh",
+      "to": "environment-and-capability-detection",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-qd-config",
+      "to": "environment-and-capability-detection",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-runtime-environment",
+      "to": "environment-and-capability-detection",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-repo-git-gh",
+      "to": "project-and-path-boundaries",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-qd-config",
+      "to": "project-and-path-boundaries",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-repo-git-gh",
+      "to": "reading-cartridges",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-qd-config",
+      "to": "reading-cartridges",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-repo-git-gh",
+      "to": "writing-code",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-qd-config",
+      "to": "writing-code",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-repo-git-gh",
+      "to": "editing-code",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-qd-config",
+      "to": "editing-code",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-repo-git-gh",
+      "to": "parsing-code",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-qd-config",
+      "to": "parsing-code",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-repo-git-gh",
+      "to": "linting-code",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-qd-config",
+      "to": "linting-code",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-repo-git-gh",
+      "to": "reporting-size-against-the-limits",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-qd-config",
+      "to": "reporting-size-against-the-limits",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-repo-git-gh",
+      "to": "minifying-code",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-qd-config",
+      "to": "minifying-code",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-repo-git-gh",
+      "to": "converting-cartridge-formats",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-qd-config",
+      "to": "converting-cartridge-formats",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-repo-git-gh",
+      "to": "editing-sprites",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-qd-config",
+      "to": "editing-sprites",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-repo-git-gh",
+      "to": "editing-sprite-flags",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-qd-config",
+      "to": "editing-sprite-flags",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-repo-git-gh",
+      "to": "editing-the-map",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-qd-config",
+      "to": "editing-the-map",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-repo-git-gh",
+      "to": "sprite-sheet-images",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-qd-config",
+      "to": "sprite-sheet-images",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-repo-git-gh",
+      "to": "editing-sound-effects",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-qd-config",
+      "to": "editing-sound-effects",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-repo-git-gh",
+      "to": "running-a-cartridge-headlessly",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-qd-config",
+      "to": "running-a-cartridge-headlessly",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-runtime-environment",
+      "to": "running-a-cartridge-headlessly",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-repo-git-gh",
+      "to": "exporting-a-distributable",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-qd-config",
+      "to": "exporting-a-distributable",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-runtime-environment",
+      "to": "exporting-a-distributable",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-repo-git-gh",
+      "to": "reference-data",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-qd-config",
+      "to": "reference-data",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-repo-git-gh",
+      "to": "toolbox-contract",
+      "type": "requires"
+    },
+    {
+      "from": "bootstrap-qd-config",
+      "to": "toolbox-contract",
+      "type": "requires"
+    },
+    {
+      "from": "project-and-path-boundaries",
+      "to": "reading-cartridges",
+      "type": "requires"
+    },
+    {
+      "from": "project-and-path-boundaries",
+      "to": "writing-code",
+      "type": "requires"
+    },
+    {
+      "from": "project-and-path-boundaries",
+      "to": "editing-code",
+      "type": "requires"
+    },
+    {
+      "from": "project-and-path-boundaries",
+      "to": "editing-sprites",
+      "type": "requires"
+    },
+    {
+      "from": "project-and-path-boundaries",
+      "to": "editing-sprite-flags",
+      "type": "requires"
+    },
+    {
+      "from": "project-and-path-boundaries",
+      "to": "editing-the-map",
+      "type": "requires"
+    },
+    {
+      "from": "project-and-path-boundaries",
+      "to": "sprite-sheet-images",
+      "type": "requires"
+    },
+    {
+      "from": "project-and-path-boundaries",
+      "to": "editing-sound-effects",
+      "type": "requires"
+    },
+    {
+      "from": "project-and-path-boundaries",
+      "to": "reference-data",
+      "type": "requires"
+    },
+    {
+      "from": "reading-cartridges",
+      "to": "writing-code",
+      "type": "requires"
+    },
+    {
+      "from": "reading-cartridges",
+      "to": "editing-code",
+      "type": "requires"
+    },
+    {
+      "from": "reading-cartridges",
+      "to": "parsing-code",
+      "type": "requires"
+    },
+    {
+      "from": "reading-cartridges",
+      "to": "linting-code",
+      "type": "requires"
+    },
+    {
+      "from": "reading-cartridges",
+      "to": "reporting-size-against-the-limits",
+      "type": "requires"
+    },
+    {
+      "from": "reading-cartridges",
+      "to": "minifying-code",
+      "type": "requires"
+    },
+    {
+      "from": "reading-cartridges",
+      "to": "converting-cartridge-formats",
+      "type": "requires"
+    },
+    {
+      "from": "reading-cartridges",
+      "to": "editing-sprites",
+      "type": "requires"
+    },
+    {
+      "from": "reading-cartridges",
+      "to": "editing-sprite-flags",
+      "type": "requires"
+    },
+    {
+      "from": "reading-cartridges",
+      "to": "editing-the-map",
+      "type": "requires"
+    },
+    {
+      "from": "reading-cartridges",
+      "to": "sprite-sheet-images",
+      "type": "requires"
+    },
+    {
+      "from": "reading-cartridges",
+      "to": "editing-sound-effects",
+      "type": "requires"
+    },
+    {
+      "from": "reading-cartridges",
+      "to": "reference-data",
+      "type": "requires"
+    },
+    {
+      "from": "writing-code",
+      "to": "editing-code",
+      "type": "requires"
+    },
+    {
+      "from": "writing-code",
+      "to": "toolbox-contract",
+      "type": "requires"
+    },
+    {
+      "from": "reporting-size-against-the-limits",
+      "to": "writing-code",
+      "type": "requires"
+    },
+    {
+      "from": "reporting-size-against-the-limits",
+      "to": "editing-code",
+      "type": "requires"
+    },
+    {
+      "from": "reporting-size-against-the-limits",
+      "to": "minifying-code",
+      "type": "requires"
+    },
+    {
+      "from": "parsing-code",
+      "to": "linting-code",
+      "type": "requires"
+    },
+    {
+      "from": "environment-and-capability-detection",
+      "to": "running-a-cartridge-headlessly",
+      "type": "requires"
+    },
+    {
+      "from": "environment-and-capability-detection",
+      "to": "exporting-a-distributable",
+      "type": "requires"
+    },
+    {
+      "from": "editing-sprites",
+      "to": "sprite-sheet-images",
+      "type": "requires"
+    },
+    {
+      "from": "editing-sprites",
+      "to": "exporting-a-distributable",
+      "type": "requires"
+    },
+    {
+      "from": "running-a-cartridge-headlessly",
+      "to": "exporting-a-distributable",
+      "type": "requires"
+    },
+    {
+      "from": "reading-cartridges",
+      "to": "toolbox-contract",
+      "type": "requires"
+    },
+    {
+      "from": "reference-data",
+      "to": "toolbox-contract",
+      "type": "requires"
+    }
+  ]
+}
