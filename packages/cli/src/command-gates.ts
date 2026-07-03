@@ -49,4 +49,8 @@ const READ_ONLY_GROUPS = new Set([
   "gate",
   "completion-ready",
   "merge-ready",
+  "cart",
+  "cartridge",
+  "ref",
+  "toolbox",
 ]);
