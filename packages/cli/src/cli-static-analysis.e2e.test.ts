@@ -1,9 +1,7 @@
-import { copyFile, mkdtemp, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { copyFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
-import { installCliFixture, qd, qdAt, qdJson, qdJsonAllowExit, qdRaw, root } from "./cli-e2e-fixtures.js";
-import { createMinimalPng, extractP8FromPng } from "@cat-cave/qdcli-core";
+import { beforeEach, describe, expect, it } from "vite-plus/test";
+import { installCliFixture, qd, qdJson, qdJsonAllowExit, root } from "./cli-e2e-fixtures.js";
 
 installCliFixture();
 
@@ -121,7 +119,7 @@ describe("cart parse", () => {
       "version 42",
       "__lua__",
       'print("unclosed',
-      'x = {1, 2, 3)',
+      "x = {1, 2, 3)",
       "__gfx__",
       "__gff__",
       "__map__",
@@ -204,7 +202,14 @@ describe("cart convert", () => {
   it("reports that the source cartridge was not found", async () => {
     const nonExistentPath = path.join(root, "does-not-exist.p8");
 
-    const result = await qdJsonAllowExit("cart", "convert", nonExistentPath, "--to", "p8.png", "--json");
+    const result = await qdJsonAllowExit(
+      "cart",
+      "convert",
+      nonExistentPath,
+      "--to",
+      "p8.png",
+      "--json",
+    );
 
     expect(result.json.error).toBe("cartridge was not found");
   });
@@ -220,7 +225,9 @@ describe("cart convert", () => {
     const roundTripPath = path.join(root, "roundtrip.p8");
     await qdJson("cart", "convert", pngPath, "--to", "p8", "--output", roundTripPath, "--json");
 
-    const roundTripContent = await (await import("node:fs/promises")).readFile(roundTripPath, "utf-8");
+    const roundTripContent = await (
+      await import("node:fs/promises")
+    ).readFile(roundTripPath, "utf-8");
     expect(roundTripContent).toBe(originalContent);
   });
 });

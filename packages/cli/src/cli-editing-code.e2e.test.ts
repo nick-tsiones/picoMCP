@@ -1,8 +1,7 @@
-import { copyFile, mkdtemp, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { copyFile } from "node:fs/promises";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
-import { installCliFixture, qd, qdJson, qdJsonAllowExit, qdRaw, root } from "./cli-e2e-fixtures.js";
+import { beforeEach, describe, expect, it } from "vite-plus/test";
+import { installCliFixture, qd, qdJson, root } from "./cli-e2e-fixtures.js";
 import { CartRepo } from "@cat-cave/qdcli-core";
 
 installCliFixture();
@@ -30,8 +29,17 @@ describe("cart edit", () => {
   it("replaces a specific range of lines and reports updated size", async () => {
     const newCode = 'print("replaced line")';
     const result = await qdJson(
-      "cart", "edit", "range", cartPath,
-      "--from", "1", "--to", "1", "--code", newCode, "--json",
+      "cart",
+      "edit",
+      "range",
+      cartPath,
+      "--from",
+      "1",
+      "--to",
+      "1",
+      "--code",
+      newCode,
+      "--json",
     );
 
     expect(result.charCount).toBeGreaterThan(0);
@@ -49,8 +57,17 @@ describe("cart edit", () => {
   it("replaces multiple lines and leaves other tabs unchanged", async () => {
     const codeLines = 'print("line a")\nprint("line b")';
     const result = await qdJson(
-      "cart", "edit", "range", cartPath,
-      "--from", "1", "--to", "1", "--code", codeLines, "--json",
+      "cart",
+      "edit",
+      "range",
+      cartPath,
+      "--from",
+      "1",
+      "--to",
+      "1",
+      "--code",
+      codeLines,
+      "--json",
     );
 
     expect(result.replacedRange).toEqual({ from: 1, to: 1 });
@@ -67,8 +84,15 @@ describe("cart edit", () => {
   // Behavior: editing-code/edit-by-finding-and-replacing-text
   it("replaces matching occurrences by finding and replacing text", async () => {
     const result = await qdJson(
-      "cart", "edit", "replace", cartPath,
-      "--find", "print", "--replace", "printh", "--json",
+      "cart",
+      "edit",
+      "replace",
+      cartPath,
+      "--find",
+      "print",
+      "--replace",
+      "printh",
+      "--json",
     );
 
     expect(result.replaced).toBeGreaterThanOrEqual(1);
@@ -81,8 +105,15 @@ describe("cart edit", () => {
   // Behavior: editing-code/an-unmatched-search-changes-nothing
   it("reports nothing matched when find text is not present", async () => {
     const result = await qdJson(
-      "cart", "edit", "replace", cartPath,
-      "--find", "NONEXISTENT_TEXT_XYZ", "--replace", "foo", "--json",
+      "cart",
+      "edit",
+      "replace",
+      cartPath,
+      "--find",
+      "NONEXISTENT_TEXT_XYZ",
+      "--replace",
+      "foo",
+      "--json",
     );
 
     expect(result.error).toBe("nothing matched");
@@ -99,8 +130,13 @@ describe("cart edit", () => {
   it("appends code at the end and leaves the rest unchanged", async () => {
     const appendedCode = 'print("appended")';
     const result = await qdJson(
-      "cart", "edit", "append", cartPath,
-      "--code", appendedCode, "--json",
+      "cart",
+      "edit",
+      "append",
+      cartPath,
+      "--code",
+      appendedCode,
+      "--json",
     );
 
     expect(result.charCount).toBeGreaterThan(0);
@@ -119,8 +155,17 @@ describe("cart edit", () => {
   // Behavior: editing-code/editing-a-tab-that-does-not-exist-is-rejected
   it("rejects editing a tab that does not exist", async () => {
     const result = await qdJson(
-      "cart", "edit", "range", cartPath,
-      "--from", "99", "--to", "99", "--code", "x = 1", "--json",
+      "cart",
+      "edit",
+      "range",
+      cartPath,
+      "--from",
+      "99",
+      "--to",
+      "99",
+      "--code",
+      "x = 1",
+      "--json",
     );
 
     expect(result.error).toBeDefined();
@@ -135,8 +180,17 @@ describe("cart edit", () => {
 
     // Replace tab 1 with shorter code
     const result = await qdJson(
-      "cart", "edit", "range", cartPath,
-      "--from", "1", "--to", "1", "--code", "x=1", "--json",
+      "cart",
+      "edit",
+      "range",
+      cartPath,
+      "--from",
+      "1",
+      "--to",
+      "1",
+      "--code",
+      "x=1",
+      "--json",
     );
 
     expect(result.headroom).toBeGreaterThan(before.headroom);

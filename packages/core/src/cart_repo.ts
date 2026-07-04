@@ -99,8 +99,9 @@ function parseP8(content: string): Cart {
     if (currentSection === null) {
       // Header lines: "pico-8 cartridge // ...", "version N"
       const versionMatch = line.match(/^version\s+(\d+)/i);
-      if (versionMatch) {
-        version = parseInt(versionMatch[1], 10);
+      const versionNumber = versionMatch?.[1];
+      if (versionNumber) {
+        version = parseInt(versionNumber, 10);
       }
       continue;
     }
@@ -117,25 +118,24 @@ function parseP8(content: string): Cart {
     : [];
 
   // Parse gfx section
-  const gfx: number[][] = sections.__gfx__.trim()
-    ? parseHexRows(sections.__gfx__)
-    : [];
+  const gfx: number[][] = sections.__gfx__.trim() ? parseHexRows(sections.__gfx__) : [];
 
   // Parse gff (flags) section: each line is hex pairs
   const flags: number[] = sections.__gff__.trim()
-    ? sections.__gff__.trim().split("\n").flatMap((line) => {
-        const bytes: number[] = [];
-        for (let i = 0; i < line.length; i += 2) {
-          bytes.push(parseInt(line.slice(i, i + 2), 16));
-        }
-        return bytes;
-      })
+    ? sections.__gff__
+        .trim()
+        .split("\n")
+        .flatMap((line) => {
+          const bytes: number[] = [];
+          for (let i = 0; i < line.length; i += 2) {
+            bytes.push(parseInt(line.slice(i, i + 2), 16));
+          }
+          return bytes;
+        })
     : [];
 
   // Parse map section
-  const map: number[][] = sections.__map__.trim()
-    ? parseHexRows(sections.__map__)
-    : [];
+  const map: number[][] = sections.__map__.trim() ? parseHexRows(sections.__map__) : [];
 
   // Parse sfx section (keep as simple strings for now)
   const sfx: unknown[] = sections.__sfx__.trim()
@@ -240,7 +240,12 @@ export class CartRepo {
     try {
       content = await readFile(filePath, "utf-8");
     } catch (error: unknown) {
-      if (error && typeof error === "object" && "code" in error && (error as { code: string }).code === "ENOENT") {
+      if (
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        (error as { code: string }).code === "ENOENT"
+      ) {
         throw new Error("cartridge was not found");
       }
       throw error;

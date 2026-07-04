@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
-import { installCliFixture, qd, qdJson, qdJsonAllowExit, qdRaw, root } from "./cli-e2e-fixtures.js";
+import { beforeEach, describe, expect, it } from "vite-plus/test";
+import { installCliFixture, qd, qdJson, qdJsonAllowExit, root } from "./cli-e2e-fixtures.js";
 
 installCliFixture();
 
@@ -59,9 +59,7 @@ describe("toolbox contract", () => {
   // Behavior: toolbox-contract/errors-are-reported-in-a-consistent-shape
   it("reports errors with both error and message keys", async () => {
     // Test with a cart command that will error (nonexistent cartridge)
-    const result = await qdJsonAllowExit(
-      "cart", "size", "/nonexistent/path/cart.p8", "--json",
-    );
+    const result = await qdJsonAllowExit("cart", "size", "/nonexistent/path/cart.p8", "--json");
 
     expect(result.json.error).toBeDefined();
     expect(result.json.message).toBeDefined();
@@ -71,9 +69,8 @@ describe("toolbox contract", () => {
 
   // Verify that unmatched cart replace also uses consistent error shape
   it("cart edit replace reports nothing matched with consistent error shape", async () => {
-    const { writeFile, mkdtemp, rm } = await import("node:fs/promises");
+    const { writeFile } = await import("node:fs/promises");
     const path = await import("node:path");
-    const os = await import("node:os");
 
     // Create a simple cartridge in the project root
     const cartPath = path.default.join(root, "simple.p8");
@@ -90,8 +87,14 @@ __music__
     await writeFile(cartPath, content);
 
     const result = await qdJson(
-      "cart", "edit", "replace", cartPath,
-      "--find", "ZZZ_NONEXISTENT_ZZZ", "--replace", "foo",
+      "cart",
+      "edit",
+      "replace",
+      cartPath,
+      "--find",
+      "ZZZ_NONEXISTENT_ZZZ",
+      "--replace",
+      "foo",
       "--json",
     );
 

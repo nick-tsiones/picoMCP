@@ -1,8 +1,7 @@
-import { copyFile, mkdtemp, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { copyFile } from "node:fs/promises";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
-import { installCliFixture, qd, qdJson, qdJsonAllowExit, qdRaw, root } from "./cli-e2e-fixtures.js";
+import { beforeEach, describe, expect, it } from "vite-plus/test";
+import { installCliFixture, qd, qdJson, root } from "./cli-e2e-fixtures.js";
 import { CartRepo } from "@cat-cave/qdcli-core";
 
 installCliFixture();
@@ -49,7 +48,16 @@ describe("cart write", () => {
   it("replaces code and preserves sprites and map", async () => {
     const newCode = 'print("replaced code")';
 
-    const result = await qdJson("cart", "write", cartPath, "--code", newCode, "--tab", "1", "--json");
+    const result = await qdJson(
+      "cart",
+      "write",
+      cartPath,
+      "--code",
+      newCode,
+      "--tab",
+      "1",
+      "--json",
+    );
 
     expect(result.charCount).toBeGreaterThan(0);
     expect(result.tab).toBe(1);
@@ -70,7 +78,16 @@ describe("cart write", () => {
   it("only changes the specified tab", async () => {
     const newCode = 'print("only tab 2 changes")';
 
-    const result = await qdJson("cart", "write", cartPath, "--code", newCode, "--tab", "2", "--json");
+    const result = await qdJson(
+      "cart",
+      "write",
+      cartPath,
+      "--code",
+      newCode,
+      "--tab",
+      "2",
+      "--json",
+    );
 
     expect(result.tab).toBe(2);
 
@@ -85,7 +102,7 @@ describe("cart write", () => {
 
   // Behavior: writing-code/uppercase-identifiers-round-trip
   it("uppercase identifiers round-trip unchanged", async () => {
-    const code = 'MYVAR = 42\nfunction MYFUNC()\n  return MYVAR\nend';
+    const code = "MYVAR = 42\nfunction MYFUNC()\n  return MYVAR\nend";
 
     const result = await qdJson("cart", "write", cartPath, "--code", code, "--tab", "1", "--json");
 
@@ -99,7 +116,7 @@ describe("cart write", () => {
   // Behavior: writing-code/a-newly-created-cartridge-carries-no-boilerplate
   it("new cartridge contains only the written code and no added structure", async () => {
     const newCartPath = path.join(root, "fresh.p8");
-    const code = 'x = 1\ny = 2\nprint(x + y)';
+    const code = "x = 1\ny = 2\nprint(x + y)";
 
     const result = await qdJson("cart", "write", newCartPath, "--code", code, "--json");
 

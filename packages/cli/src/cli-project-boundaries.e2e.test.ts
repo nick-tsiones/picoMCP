@@ -1,8 +1,8 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vite-plus/test";
-import { installCliFixture, qd, qdRaw, root } from "./cli-e2e-fixtures.js";
+import { installCliFixture, qd, qdRaw } from "./cli-e2e-fixtures.js";
 
 installCliFixture();
 

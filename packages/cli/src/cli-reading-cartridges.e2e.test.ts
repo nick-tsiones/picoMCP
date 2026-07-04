@@ -1,8 +1,7 @@
-import { copyFile, mkdtemp, rm } from "node:fs/promises";
-import os from "node:os";
+import { copyFile } from "node:fs/promises";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
-import { installCliFixture, qd, qdAt, qdJson, qdJsonAllowExit, qdRaw, root } from "./cli-e2e-fixtures.js";
+import { beforeEach, describe, expect, it } from "vite-plus/test";
+import { installCliFixture, qd, qdJson, qdJsonAllowExit, root } from "./cli-e2e-fixtures.js";
 
 installCliFixture();
 

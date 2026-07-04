@@ -56,24 +56,18 @@ describe("cart lint", () => {
     expect(result.issues.length).toBeGreaterThan(0);
 
     // Should have a warning about missing local
-    const localIssue = result.issues.find(
-      (i: { message: string }) => i.message.includes("local"),
-    );
+    const localIssue = result.issues.find((i: { message: string }) => i.message.includes("local"));
     expect(localIssue).toBeDefined();
     expect(localIssue.line).toBe(2); // "myglobal = 42" is line 2 in the tab
     expect(localIssue.severity).toBe("warning");
 
     // Should have a warning about deprecated mapdraw
-    const depIssue = result.issues.find(
-      (i: { message: string }) => i.message.includes("mapdraw"),
-    );
+    const depIssue = result.issues.find((i: { message: string }) => i.message.includes("mapdraw"));
     expect(depIssue).toBeDefined();
     expect(depIssue.severity).toBe("warning");
 
     // Should have a warning about long variable name
-    const longIssue = result.issues.find(
-      (i: { message: string }) => i.message.includes("long"),
-    );
+    const longIssue = result.issues.find((i: { message: string }) => i.message.includes("long"));
     expect(longIssue).toBeDefined();
     expect(longIssue.severity).toBe("warning");
   });

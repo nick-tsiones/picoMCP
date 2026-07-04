@@ -36,19 +36,36 @@ export async function qdAt(targetRoot: string, ...args: string[]): Promise<strin
   return result.stdout;
 }
 
-export async function qdJson(...args: string[]): Promise<Record<string, any>> {
-  const text = await qd(...args);
-  return JSON.parse(text) as Record<string, any>;
+export async function qdJson(...args: any[]): Promise<Record<string, any>> {
+  const options =
+    typeof args[args.length - 1] === "object" && !Array.isArray(args[args.length - 1])
+      ? args.pop()
+      : undefined;
+  const text = await qdRawWithOptions(args as string[], options);
+  if (text.exitCode) {
+    throw new Error(
+      `qd ${args.join(" ")} exited ${text.exitCode}\nstdout:\n${text.stdout}\nstderr:\n${text.stderr}`,
+    );
+  }
+  return JSON.parse(text.stdout) as Record<string, any>;
 }
 
-export async function qdJsonAllowExit(
-  ...args: string[]
-): Promise<{ exitCode: number | undefined; json: Record<string, any>; stderr: string }> {
-  const result = await qdRaw(args);
+export async function qdJsonAllowExit(...args: any[]): Promise<{
+  exitCode: number | undefined;
+  json: Record<string, any>;
+  stderr: string;
+  stdout: string;
+}> {
+  const options =
+    typeof args[args.length - 1] === "object" && !Array.isArray(args[args.length - 1])
+      ? args.pop()
+      : undefined;
+  const result = await qdRawWithOptions(args as string[], options);
   return {
     exitCode: result.exitCode,
-    json: JSON.parse(result.stdout) as Record<string, any>,
+    json: result.stdout ? (JSON.parse(result.stdout) as Record<string, any>) : {},
     stderr: result.stderr,
+    stdout: result.stdout,
   };
 }
 
@@ -64,7 +81,15 @@ export async function configureStrictDoctorCommands(): Promise<void> {
 }
 
 export async function qdRaw(
+  ...args: any[]
+): Promise<{ exitCode: number | undefined; stdout: string; stderr: string }> {
+  const { cliArgs, options } = normalizeCliArgs(args);
+  return qdRawWithOptions(cliArgs, options);
+}
+
+async function qdRawWithOptions(
   args: string[],
+  options: { env?: Record<string, string> } | undefined,
 ): Promise<{ exitCode: number | undefined; stdout: string; stderr: string }> {
   const previousExitCode = process.exitCode;
   const output: string[] = [];
@@ -79,6 +104,13 @@ export async function qdRaw(
   console.error = (...values: unknown[]) => {
     errors.push(values.map(String).join(" "));
   };
+  const restoreEnv = new Map<string, string | undefined>();
+  if (options?.env) {
+    for (const [name, value] of Object.entries(options.env)) {
+      restoreEnv.set(name, process.env[name]);
+      process.env[name] = value;
+    }
+  }
   try {
     await runCli(rootedArgs);
     return {
@@ -97,6 +129,26 @@ export async function qdRaw(
   } finally {
     console.log = previousLog;
     console.error = previousError;
+    for (const [name, value] of restoreEnv) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
     process.exitCode = previousExitCode;
   }
+}
+
+function normalizeCliArgs(args: any[]): {
+  cliArgs: string[];
+  options: { env?: Record<string, string> } | undefined;
+} {
+  const copied = [...args];
+  const options =
+    typeof copied[copied.length - 1] === "object" && !Array.isArray(copied[copied.length - 1])
+      ? (copied.pop() as { env?: Record<string, string> })
+      : undefined;
+  const cliArgs =
+    copied.length === 1 && Array.isArray(copied[0])
+      ? (copied[0] as string[])
+      : (copied as string[]);
+  return { cliArgs, options };
 }
