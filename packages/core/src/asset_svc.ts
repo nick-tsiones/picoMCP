@@ -83,15 +83,15 @@ function ensureFullGfx(gfx: number[][]): number[][] {
 }
 
 export function getSprite(gfx: number[][], n: number): SpritePixels {
-  if (n < 0 || n > 127) throw new Error("Sprite index must be 0-127");
+  if (n < 0 || n > 255) throw new Error("Sprite index must be 0-255");
   const full = ensureFullGfx(gfx);
-  const rowStart = (n % 16) * 8;
-  const pixelColStart = Math.floor(n / 16) * 8;
+  const rowStart = Math.floor(n / 16) * 8;
+  const byteColStart = (n % 16) * 4;
   const pixels: number[] = [];
   for (let r = 0; r < 8; r++) {
     const row = full[rowStart + r]!;
     for (let pc = 0; pc < 8; pc++) {
-      const byteCol = pixelColStart + Math.floor(pc / 2);
+      const byteCol = byteColStart + Math.floor(pc / 2);
       const byteVal = row[byteCol] ?? 0;
       const isHigh = pc % 2 === 0;
       pixels.push(isHigh ? (byteVal >> 4) & 0x0f : byteVal & 0x0f);
@@ -101,15 +101,15 @@ export function getSprite(gfx: number[][], n: number): SpritePixels {
 }
 
 export function setSprite(gfx: number[][], n: number, pixels: SpritePixels): void {
-  if (n < 0 || n > 127) throw new Error("Sprite index must be 0-127");
+  if (n < 0 || n > 255) throw new Error("Sprite index must be 0-255");
   if (pixels.length !== 64) throw new Error("Sprite must be exactly 64 pixels (8×8)");
   const full = ensureFullGfx(gfx);
-  const rowStart = (n % 16) * 8;
-  const pixelColStart = Math.floor(n / 16) * 8;
+  const rowStart = Math.floor(n / 16) * 8;
+  const byteColStart = (n % 16) * 4;
   for (let r = 0; r < 8; r++) {
     const row = full[rowStart + r]!;
     for (let pc = 0; pc < 8; pc++) {
-      const byteCol = pixelColStart + Math.floor(pc / 2);
+      const byteCol = byteColStart + Math.floor(pc / 2);
       const px = pixels[r * 8 + pc]!;
       if (px < 0 || px > 15) throw new Error(`Pixel value ${px} out of range (0-15)`);
       const isHigh = pc % 2 === 0;
@@ -127,8 +127,8 @@ export function getSpriteRange(
   start: number,
   end: number,
 ): { index: number; pixels: SpritePixels }[] {
-  if (start < 0 || end > 127 || start > end) {
-    throw new Error("Sprite range must be within 0-127 and start <= end");
+  if (start < 0 || end > 255 || start > end) {
+    throw new Error("Sprite range must be within 0-255 and start <= end");
   }
   const result: { index: number; pixels: SpritePixels }[] = [];
   for (let i = start; i <= end; i++) {
