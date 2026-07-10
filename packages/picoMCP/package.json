@@ -9,7 +9,7 @@
     "directory": "packages/picoMCP"
   },
   "bin": {
-    "picoMCP": "./dist/index.mjs"
+    "picomcp": "./dist/index.mjs"
   },
   "files": [
     "dist",

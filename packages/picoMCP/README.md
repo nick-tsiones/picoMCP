@@ -130,6 +130,6 @@ Example MCP tools/call for reading a cartridge:
 
 ## Dependencies
 
-- Node.js ≥ 22
+- Node.js ≥ 24
 - PICO-8 licensed binary (for `run` and `export` commands)
 - `xvfb-run` (Linux, for headless PICO-8 execution)

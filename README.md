@@ -11,19 +11,26 @@ picoMCP serve        # start MCP server for AI agent integration
 ## Install
 
 ```sh
-git clone https://github.com/nick-tsiones/picoMCP.git
-cd picoMCP
-corepack pnpm install
-corepack pnpm run build
+pnpm dlx picomcp --version
+npx picomcp --version
 ```
 
-The `picoMCP` binary is at `packages/picoMCP/dist/index.mjs`. Add it to your PATH or alias it:
+The canonical binary name is `picomcp` (lowercase) — the package registers it as an npm bin entry.
+
+**Prerequisites**: A licensed PICO-8 binary (`pico-8/pico8`) and `xvfb-run` for headless execution on Linux. Node.js ≥ 24.
+
+### Upgrade
 
 ```sh
-alias picoMCP="node $(pwd)/packages/picoMCP/dist/index.mjs"
+pnpm dlx picomcp@latest --version
 ```
 
-Requires a licensed PICO-8 binary in `pico-8/pico8` and `xvfb-run` for headless execution on Linux.
+### Uninstall
+
+```sh
+pnpm store prune                 # for pnpm dlx cache
+npm uninstall -g picomcp         # for global npm installs
+```
 
 ## CLI Usage
 
@@ -161,7 +168,29 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | picoMCP serv
 
 ## Development
 
-This project is built and tracked using a local-first DAG ledger for evidence-backed agentic development. The `qd` (qdcli) binary manages the DAG — see `DAG_STATUS.md` for current state, `docs/` for qdcli documentation.
+```sh
+git clone https://github.com/nick-tsiones/picoMCP.git
+cd picoMCP
+corepack pnpm install
+corepack pnpm run ci
+```
+
+See `AGENTS.md` for architecture, safe editing rules, and troubleshooting.
+
+## Support
+
+- **Node.js**: >= 24
+- **PICO-8**: 0.2.7+ (licensed binary required)
+- **Platform**: Linux (headless), macOS (headless)
+- **Windows**: Not supported (PICO-8 headless requires xvfb-run)
+
+### Versioning
+
+This project follows [Semantic Versioning](https://semver.org). The public API is the CLI command interface and MCP tool definitions.
+
+### Reporting issues
+
+Use [GitHub Issues](https://github.com/nick-tsiones/picoMCP/issues). Include `picomcp --version` output.
 
 ## License
 
