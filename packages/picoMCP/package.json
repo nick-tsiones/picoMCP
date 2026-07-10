@@ -1,0 +1,38 @@
+{
+  "name": "picomcp",
+  "version": "0.1.0",
+  "description": "Standalone PICO-8 cartridge CLI and MCP server for agent-authored programs",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cat-cave/qdcli.git",
+    "directory": "packages/picoMCP"
+  },
+  "bin": {
+    "picoMCP": "./dist/index.mjs"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.mjs"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "prepack": "pnpm run build",
+    "build": "node ../../scripts/build-picomcp-package.mjs",
+    "typecheck": "vp exec tsgo --noEmit -p tsconfig.json",
+    "typecheck:tsgo": "vp exec tsgo --noEmit -p tsconfig.json",
+    "test": "vp test run"
+  },
+  "dependencies": {
+    "@cat-cave/qdcli-core": "workspace:*"
+  },
+  "engines": {
+    "node": ">=24.14.0"
+  }
+}
