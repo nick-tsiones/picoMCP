@@ -19,7 +19,8 @@ picoMCP serve        # start MCP server (31 tools over JSON-RPC stdio)
 ### Writing
 | Command | Description |
 |---------|-------------|
-| `picoMCP write <file> --code <lua> [--tab <n>] [--json]` | Write code to a new or existing cartridge |
+| `picoMCP write <file> --code="<lua>" [--tab <n>] [--json]` | Write code to a new or existing cartridge |
+| Example: `picoMCP write mygame.p8 --code="cls()\nprint('hi')" --json` | |
 
 ### Editing
 | Command | Description |

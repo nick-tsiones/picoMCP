@@ -27,6 +27,38 @@ interface ParsedArgs {
   options: Record<string, string | string[] | boolean>;
 }
 
+const VALUE_OPTIONS = new Set([
+  "capture",
+  "capture-at",
+  "code",
+  "data",
+  "end",
+  "find",
+  "frames",
+  "from",
+  "height",
+  "index",
+  "input",
+  "output",
+  "param",
+  "pattern",
+  "pico8",
+  "pixels",
+  "replace",
+  "root",
+  "sprites",
+  "sprite",
+  "start",
+  "tab",
+  "tile",
+  "to",
+  "value",
+  "values",
+  "width",
+  "x",
+  "y",
+]);
+
 export function parseArgs(argv: string[]): ParsedArgs {
   const command: string[] = [];
   const options: Record<string, string | string[] | boolean> = {};
@@ -39,7 +71,14 @@ export function parseArgs(argv: string[]): ParsedArgs {
       if (!key) continue;
       const next = argv[i + 1];
       const hasInlineValue = inlineValue !== undefined;
-      const value = hasInlineValue ? inlineValue : next && !next.startsWith("-") ? next : true;
+      const takesValue = VALUE_OPTIONS.has(key);
+      const value = hasInlineValue
+        ? inlineValue
+        : takesValue && next !== undefined
+          ? next
+          : next && !next.startsWith("-")
+            ? next
+            : true;
       if (!hasInlineValue && value !== true) i += 1;
       options[key] = value;
     } else {

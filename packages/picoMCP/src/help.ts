@@ -52,6 +52,9 @@ Reference:
 MCP Server:
   picoMCP serve
 
+Tip: Use --option="value" form to pass values that start with hyphens or contain
+     special characters, e.g. --code="-- comment\ncls()"
+
 Global options:
   --json     Output results as JSON
   --help     Show command help
