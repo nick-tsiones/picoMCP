@@ -84,6 +84,23 @@ function validateLuaSyntax(source: string, tab: number): string[] {
     const ch = source[i];
     const prev = i > 0 ? source[i - 1] : "";
 
+    if (
+      ch === "-" &&
+      source[i + 1] === "-" &&
+      !inSingleQuote &&
+      !inDoubleQuote &&
+      !inLongString &&
+      !inLongComment
+    ) {
+      if (source[i + 2] === "[" && source[i + 3] === "[") {
+        i += 4;
+        inLongComment = true;
+        continue;
+      }
+      while (i < source.length && source[i] !== "\n") i++;
+      continue;
+    }
+
     // Check for long bracket start/end [[ or ]]
     if (ch === "[" && source[i + 1] === "[" && !inSingleQuote && !inDoubleQuote) {
       if (prev === "-" && source[i - 2] === "-") {

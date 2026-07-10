@@ -32,7 +32,11 @@ function sendRpc(child: ChildProcess, request: object): Promise<object> {
 }
 
 interface McpResponse {
-  result?: { tools?: unknown[]; content?: Array<{ type: string; text: string }>; isError?: boolean };
+  result?: {
+    tools?: unknown[];
+    content?: Array<{ type: string; text: string }>;
+    isError?: boolean;
+  };
 }
 
 describe("picoMCP MCP server smoke", () => {

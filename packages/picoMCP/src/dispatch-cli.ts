@@ -60,6 +60,13 @@ export function parsePositiveInteger(value: string, key: string): number {
   return parsed;
 }
 
+export function parseNonNegativeInteger(value: string, key: string): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0)
+    throw new Error(`${key} must be a non-negative integer (0-based)`);
+  return parsed;
+}
+
 export function stringOpt(value: string | string[] | boolean | undefined): string | undefined {
   if (Array.isArray(value)) return value.at(-1);
   return typeof value === "string" ? value : undefined;

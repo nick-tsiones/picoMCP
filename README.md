@@ -37,11 +37,11 @@ picoMCP read mygame.p8 --tab 1 --json    # read a single code tab
 ### Writing and editing
 
 ```sh
-picoMCP write mygame.p8 --code "cls()\nprint('hi')" --json
-picoMCP write mygame.p8 --code "x=1" --tab 2 --json
-picoMCP edit mygame.p8 range --from 1 --to 3 --code "new lines" --json
+picoMCP write mygame.p8 --code="cls()\nprint('hi')" --json
+picoMCP write mygame.p8 --code="x=1" --tab 2 --json
+picoMCP edit mygame.p8 range --from 1 --to 3 --code="new lines" --json
 picoMCP edit mygame.p8 replace --find "old" --replace "new" --json
-picoMCP edit mygame.p8 append --code "function _draw() end" --json
+picoMCP edit mygame.p8 append --code="function _draw() end" --json
 ```
 
 ### Static analysis
@@ -75,7 +75,7 @@ picoMCP map get-region mygame.p8 --x 0 --y 0 --w 16 --h 16 --json
 ```sh
 picoMCP sfx list mygame.p8 --json
 picoMCP sfx get mygame.p8 --index 0 --json
-picoMCP sfx set mygame.p8 --index 0 --notes "C4,E4,G4" --json
+picoMCP sfx set mygame.p8 --index 0 --data='{"notes":[{"pitch":24,"instr":1,"vol":3,"fx":0}],"speed":12,"loopStart":0,"loopEnd":0}' --json
 ```
 
 ### Format conversion
@@ -103,12 +103,16 @@ picoMCP export mygame.p8 --to web --output dist/game.html
 picoMCP export mygame.p8 --to native --output dist/game.bin
 ```
 
+Note: PICO-8 headless runs seed `srand(1)` for deterministic output. Re-seed in `_init()` if your game needs random variety. A `--capture-at` value greater than the frame count (or a timeout kill with exit code 124) does not mean the capture failed — a partial capture may still be valid.
+
+````
+
 ### PICO-8 reference
 
 ```sh
 picoMCP ref api --json          # full PICO-8 API reference
 picoMCP ref pitfalls --json     # Lua pitfalls guide for PICO-8
-```
+````
 
 ## MCP Server
 
