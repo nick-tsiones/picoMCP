@@ -39,7 +39,7 @@ Assets:
   picoMCP flags bulk <file> --pattern <values> [--json]
 
 Runtime:
-  picoMCP run <file> [--pico8 <path>] [--frames <n>] [--capture none|screen|gif] [--capture-at <n>] [--param <s>] [--json]
+  picoMCP run <file> [--pico8 <path>] [--frames <n>] [--capture none|screen|gif] [--capture-at <n>] [--param <s>] [--timeout <ms>] [--json]
   picoMCP export <file> --to web|native [--pico8 <path>] [--output <path>] [--json]
 
 Conversion:

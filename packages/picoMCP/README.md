@@ -76,6 +76,7 @@ picoMCP serve        # start MCP server (31 tools over JSON-RPC stdio)
 | `picoMCP run <file> --capture gif --frames <n> [--json]` | Run with animated capture |
 | `picoMCP run <file> --trace <vars> [--json]` | Run with variable tracing |
 | `picoMCP run <file> --buttons <json> [--json]` | Run with scripted inputs |
+| `picoMCP run <file> --timeout 60000 [--json]` | Run with custom 60s timeout |
 | `picoMCP export <file> --to web --output <path>` | Export web build |
 | `picoMCP export <file> --to native --output <path>` | Export native binary |
 
