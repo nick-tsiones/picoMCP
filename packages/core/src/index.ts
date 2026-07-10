@@ -8,7 +8,7 @@ export * from "./db.js";
 export * from "./graph.js";
 export * from "./path_guard.js";
 export * from "./ref_svc.js";
-// export * from "./runtime_svc.js"; -- placeholder, module not yet created
+export * from "./runtime_svc.js";
 export * from "./static-analysis.js";
 export * from "./static-png.js";
 export * from "./static_svc.js";

@@ -14,6 +14,7 @@ import { isPolicyPhase, strictEnumOpt } from "./enums.js";
 import { capabilityCommand } from "./capability-commands.js";
 import {
   convertCommand,
+  exportCartCommand,
   flagsBulkCommand,
   flagsGetCommand,
   flagsSetCommand,
@@ -219,7 +220,10 @@ export async function cartridgeCommand(
     return writeCommand(root, filePath, options, json);
   }
   if (action === "run") {
-    return runCartCommand(root, filePath, json);
+    return runCartCommand(root, filePath, options, json);
+  }
+  if (action === "export") {
+    return exportCartCommand(root, filePath, options, json);
   }
   if (action === "lint") {
     return lintCommand(root, filePath, json);
