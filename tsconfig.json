@@ -1,4 +1,4 @@
 {
   "files": [],
-  "references": [{ "path": "packages/core" }, { "path": "packages/cli" }, { "path": "apps/viewer" }]
+  "references": [{ "path": "packages/core" }, { "path": "packages/picoMCP" }]
 }

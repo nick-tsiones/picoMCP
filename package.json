@@ -4,37 +4,20 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vp run @cat-cave/qdcli-core#build && vp run @cat-cave/qdcli#build && vp run picomcp#build",
-    "changeset": "changeset",
-    "ci": "pnpm run build && vp check && vp test run --coverage && vp run typecheck:tsgo",
-    "coverage": "vp test run --coverage",
-    "dev:view": "vp run @qdcli/viewer#dev",
-    "format": "vp fmt --write .",
-    "format:check": "vp fmt --check .",
-    "lint": "vp lint",
-    "mutation": "stryker run",
-    "pack": "vp pm pack --filter ./packages/core --filter ./packages/cli -- --dry-run",
-    "release:publish": "changeset publish --no-git-tag",
-    "release:version": "changeset version",
+    "build": "vp run @cat-cave/qdcli-core#build && vp run picomcp#build",
     "test": "vp test",
     "typecheck": "vp check",
-    "typecheck:tsgo": "vp exec tsgo --noEmit -p tsconfig.json && vp run --filter ./packages/* --filter ./apps/* typecheck:tsgo"
+    "lint": "vp lint",
+    "format": "vp fmt --write .",
+    "ci": "pnpm run build && vp check && vp test"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.31.0",
-    "@stryker-mutator/core": "^9.6.1",
-    "@stryker-mutator/typescript-checker": "^9.6.1",
-    "@stryker-mutator/vitest-runner": "^9.6.1",
     "@types/node": "^26.0.1",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
-    "@typescript/native-preview": "7.0.0-dev.20260624.1",
-    "@vitejs/plugin-react": "^6.0.3",
-    "@vitest/coverage-v8": "^4.1.9",
     "typescript": "^6.0.3",
     "vite": "catalog:",
     "vite-plus": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@vitest/coverage-v8": "^4.1.9"
   },
   "engines": {
     "node": ">=24.14.0",

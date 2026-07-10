@@ -1,1 +1,0 @@
-RUNNING: /tmp/qdcli-runtime-Dg63yk/root/driver.p8

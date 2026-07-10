@@ -1,1 +1,0 @@
-RUNNING: /tmp/qdcli-runtime-QbVeio/root/driver.p8

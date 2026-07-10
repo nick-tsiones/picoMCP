@@ -6,9 +6,8 @@ export default defineConfig({
       exclude: [
         "packages/**/*.test.ts",
         "packages/core/src/index.ts",
-        "packages/cli/src/prompts.ts",
       ],
-      include: ["packages/core/src/**/*.ts", "packages/cli/src/**/*.ts"],
+      include: ["packages/core/src/**/*.ts", "packages/picoMCP/src/**/*.ts"],
       provider: "v8",
       reporter: ["text", "json-summary", "html"],
       thresholds: {
