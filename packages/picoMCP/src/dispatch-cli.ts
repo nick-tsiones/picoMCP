@@ -248,6 +248,7 @@ async function handleRun(
     capture: (stringOpt(options.capture) as "none" | "screen" | "gif" | undefined) ?? "none",
     captureAt: numberOpt(options["capture-at"]),
     param: stringOpt(options.param),
+    timeoutMs: numberOpt(options.timeout),
   });
   output(result, json);
   if (!result.success) process.exitCode = result.timedOut || result.error ? 5 : 1;
