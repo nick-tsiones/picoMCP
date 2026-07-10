@@ -1,4 +1,5 @@
-import { resolveProjectRoot } from "@cat-cave/qdcli-core";
+import { resolveProjectRoot, type RunInputFrame } from "@cat-cave/qdcli-core";
+import { readFile } from "node:fs/promises";
 import {
   convertCartridge,
   exportCartridge,
@@ -235,6 +236,37 @@ async function handleWrite(
   output(await writeCartridge(root, filePath, code, tabIndex), json);
 }
 
+async function parseInputOption(
+  value: string,
+): Promise<RunInputFrame[]> {
+  let raw: string;
+  if (value.startsWith("@")) {
+    raw = await readFile(value.slice(1), "utf8");
+  } else {
+    raw = value;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("--input must be valid JSON or @file.json with valid JSON");
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error("--input must be a JSON array of {frame, hold} entries");
+  }
+  for (const entry of parsed) {
+    if (
+      typeof entry !== "object" ||
+      entry === null ||
+      typeof (entry as Record<string, unknown>).frame !== "number" ||
+      !Array.isArray((entry as Record<string, unknown>).hold)
+    ) {
+      throw new Error('Each --input entry must have "frame" (number) and "hold" (array of numbers)');
+    }
+  }
+  return parsed as RunInputFrame[];
+}
+
 async function handleRun(
   root: string,
   action: string | undefined,
@@ -242,12 +274,15 @@ async function handleRun(
   json: boolean,
 ): Promise<void> {
   const filePath = requiredArg(action, "cartridge file path");
+  const inputRaw = stringOpt(options.input);
+  const input = inputRaw ? await parseInputOption(inputRaw) : undefined;
   const result = await runCartridge(root, filePath, {
     binaryPath: stringOpt(options.pico8),
     frames: numberOpt(options.frames),
     capture: (stringOpt(options.capture) as "none" | "screen" | "gif" | undefined) ?? "none",
     captureAt: numberOpt(options["capture-at"]),
     param: stringOpt(options.param),
+    input,
   });
   output(result, json);
   if (!result.success) process.exitCode = result.timedOut || result.error ? 5 : 1;
