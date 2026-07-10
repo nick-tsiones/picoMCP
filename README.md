@@ -1,102 +1,41 @@
-# qdcli
+# picoMCP
 
-Quick DAG is a thin CLI for orchestrator-led agentic project work. It stores a repo-local DAG of executable spec nodes, dependency edges, audit findings, lifecycle runs, CI state, and merge state.
+A toolbox for agent-authored PICO-8 programs — an MCP server + CLI that exposes low-level, composable primitives for reading, writing, editing, linting, minifying, and running PICO-8 cartridges headlessly.
 
-qd does not run agents or decide where subagents execute. The intended model is one central orchestrator agent keeping the DAG accurate, selecting ready nodes, and delegating implementation or audit work to subagents in worktrees, remote machines, or whatever execution setup fits the project. qd stays simple: dependencies must be respected, specs must be completed, audits must happen, P0/P1 findings must be resolved, P2/P3 findings must enter the DAG, and CI must pass before merge.
+## What it does
 
-## Install
+- **Read** cartridges (overview, individual code tabs, assets)
+- **Write/edit** code (line ranges, find-and-replace, append, per-tab)
+- **Parse and lint** PICO-8 Lua code
+- **Minify** code (safe and aggressive modes, size optimization)
+- **Edit assets** (sprites, sprite flags, map, sound effects)
+- **Import/export sprite sheets** as PNG images
+- **Convert cartridge formats** (.p8 ↔ .p8.png)
+- **Run cartridges headlessly** with screenshots, animations, telemetry, and tracing
+- **Export distributables** (web builds, native binaries)
+- **Reference data** (PICO-8 API reference, Lua pitfalls guide)
 
-Universal npm package install:
+## Architecture
 
-```sh
-pnpm dlx @cat-cave/qdcli --help
-pnpm dlx @cat-cave/qdcli setup --print-agent-url
-```
+picoMCP exposes two surfaces:
 
-Other package managers work too:
+- **CLI** (`picoMCP`) — for direct shell use and scripting
+- **MCP server** — for use with AI coding agents (Claude, etc.)
 
-```sh
-npx @cat-cave/qdcli --help
-bunx @cat-cave/qdcli --help
-npm install -g @cat-cave/qdcli
-qd --version
-```
+## Development
 
-Nix install:
+This project is built and tracked using qdcli, a local-first DAG ledger for evidence-backed agentic development. See `DAG_STATUS.md` for the current implementation state.
 
-```sh
-nix profile install github:cat-cave/qdcli#qd
-qd --version
-```
+### Dependencies
 
-## Contributor Setup
+- Python 3.11+
+- PICO-8 (licensed binary, `pico-8/` directory)
+- xvfb-run (for headless Linux execution)
 
-```sh
-curl -fsSL https://vite.plus | bash
-vp help
-nix develop
-just install
-just ci
-```
+### Status
 
-The Nix shell provides Node 24, git, gh, just, and Corepack-managed pnpm. Project commands run through Vite+ (`vp`), including Oxfmt, Oxlint, Vitest, tsdown, and the TS7/native `tsgo` check lane.
+**22/22 DAG nodes complete (52/52 points)** — all planned picoMCP features are implemented and verified.
 
-## Quickstart
+## License
 
-```sh
-qd setup
-qd agent install skills-sh
-qd method show
-qd method acknowledge --agent codex
-qd config set check-command "<fast project check command>"
-qd config set ci-command "<full project CI command>"
-qd config get ci-command
-qd group register --name runtime
-qd milestone register --name baseline --rank 10
-qd node add --id scaffold --title "Scaffold project" --spec "Create the project skeleton." --acceptance "The project builds."
-qd ready
-qd claim scaffold --agent codex
-qd prompt implement scaffold
-qd template completion-report > /tmp/qd-completion.json
-# Edit /tmp/qd-completion.json so nodeId, acceptanceEvidence, commandsRun,
-# evidence, and realWorldValidation describe the actual scaffold work.
-qd complete scaffold --from-report /tmp/qd-completion.json
-qd template audit-report > /tmp/qd-clean-audit.json
-# Edit /tmp/qd-clean-audit.json so it independently reviews the diff,
-# completion evidence, acceptance criteria, and real-world validation.
-qd audit start scaffold
-qd audit pass scaffold --from-report /tmp/qd-clean-audit.json
-qd gate scaffold
-qd ci run scaffold
-# Perform the real git/GitHub merge using this repository's normal workflow.
-qd merge scaffold --use-existing-commit <merge-commit-sha>
-qd stats
-qd critical-path
-qd eta
-```
-
-For an existing non-qd roadmap, migrate instead of hand-entering nodes:
-
-```sh
-qd import --from roadmap/spec-dag.json --schema-mapping roadmap/qd-import-map.json --dry-run --json
-qd import --from roadmap/spec-dag.json --schema-mapping roadmap/qd-import-map.json
-qd validate
-```
-
-See `docs/import.md` for strict migration mapping, `statusMap`, folded fields, dependency arrays, and dry-run review.
-
-For a repo that already commits a qd export, restore the local cache with `qd sync --from roadmap/spec-dag.json --dry-run --json` and then `qd sync --from roadmap/spec-dag.json`.
-
-`qd merge` records qd state only. It does not run git or GitHub merges; keep using the repo's normal merge workflow and use qd to enforce the DAG, audit, and green-CI gate.
-
-Start the installed read-only viewer:
-
-```sh
-qd view
-```
-
-`qd view` serves an embedded local dashboard at `http://127.0.0.1:5173` by default. It reads the same DAG database as the CLI and does not mutate project state.
-
-## Agent Bootstrap
-
-Install/read the qd DAG skill, run `qd doctor`, inspect `qd status` and `qd ready`, then operate as the orchestrator: keep the DAG clean, delegate ready nodes, audit results, and require green CI before merge.
+Proprietary.
