@@ -5,12 +5,6 @@ import { installCliFixture, qd, qdJson, root } from "./cli-e2e-fixtures.js";
 
 installCliFixture();
 
-const FIXTURES_DIR = path.resolve(
-  path.dirname(new URL(import.meta.url).pathname),
-  "..",
-  "test-fixtures",
-);
-
 const PICO8_CHAR_LIMIT = 65536;
 
 function buildCart(luaCode: string): string {
@@ -362,12 +356,7 @@ describe("minifying already-minimal code stays valid", () => {
 
   it("results in valid code that is no larger than before", async () => {
     // Given a cartridge whose code is already minimal (no comments, no excess whitespace)
-    const minimalCode = [
-      "a=1",
-      "b=2",
-      "c=a+b",
-      'print("done")',
-    ].join("\n");
+    const minimalCode = ["a=1", "b=2", "c=a+b", 'print("done")'].join("\n");
     await writeFile(cartPath, buildCart(minimalCode), "utf-8");
 
     // When I minify it
