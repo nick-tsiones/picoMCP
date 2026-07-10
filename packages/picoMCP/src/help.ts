@@ -36,6 +36,7 @@ Assets:
   picoMCP sfx list <file> [--json]
   picoMCP flags get <file> [--json]
   picoMCP flags set <file> --sprite <n> --value <n> [--json]
+  picoMCP flags bulk <file> --pattern <values> [--json]
 
 Runtime:
   picoMCP run <file> [--pico8 <path>] [--frames <n>] [--capture none|screen|gif] [--capture-at <n>] [--param <s>] [--json]
