@@ -15,7 +15,7 @@ import {
   setSprite,
   setSpriteRange,
   type Sfx,
-} from "@cat-cave/qdcli-core";
+} from "@picomcp/core";
 
 const repo = new CartRepo();
 

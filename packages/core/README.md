@@ -1,9 +1,5 @@
-# @cat-cave/qdcli-core
+# @picomcp/core
 
-Core graph, database, import, workspace, and analytics engine for Quick DAG.
+Shared PICO-8 cartridge primitives library — the engine behind picoMCP. Provides cartridge parsing, code analysis, sprite/map/sfx asset manipulation, and headless PICO-8 runtime execution.
 
-Most users should install the CLI package instead:
-
-```sh
-pnpm dlx @cat-cave/qdcli --help
-```
+Used by the `picomcp` CLI and MCP server.

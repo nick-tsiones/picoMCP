@@ -5,7 +5,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cat-cave/qdcli.git",
+    "url": "git+https://github.com/nick-tsiones/picoMCP.git",
     "directory": "packages/picoMCP"
   },
   "bin": {
@@ -30,7 +30,7 @@
     "test": "vp test run"
   },
   "dependencies": {
-    "@cat-cave/qdcli-core": "workspace:*"
+    "@picomcp/core": "workspace:*"
   },
   "engines": {
     "node": ">=24.14.0"

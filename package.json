@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vp run @cat-cave/qdcli-core#build && vp run picomcp#build",
+    "build": "vp run @picomcp/core#build && vp run picomcp#build",
     "test": "vp test",
     "typecheck": "vp check",
     "lint": "vp lint",

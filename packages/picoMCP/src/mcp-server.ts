@@ -33,7 +33,7 @@ import {
   spriteImportCmd,
   writeCartridge,
 } from "./commands.js";
-import { resolveProjectRoot, type RunInputFrame } from "@cat-cave/qdcli-core";
+import { resolveProjectRoot, type RunInputFrame } from "@picomcp/core";
 
 interface JsonRpcRequest {
   jsonrpc: "2.0";

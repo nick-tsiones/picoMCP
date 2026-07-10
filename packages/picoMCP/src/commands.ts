@@ -17,8 +17,8 @@ import {
   type MinifyResult,
   type RunCartOptions,
   type RunCartResult,
-} from "@cat-cave/qdcli-core";
-import { createMinimalPng, extractP8FromPng } from "@cat-cave/qdcli-core";
+} from "@picomcp/core";
+import { createMinimalPng, extractP8FromPng } from "@picomcp/core";
 import { readFile, writeFile } from "node:fs/promises";
 
 export {

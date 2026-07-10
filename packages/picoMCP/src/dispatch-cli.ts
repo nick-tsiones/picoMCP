@@ -1,4 +1,4 @@
-import { resolveProjectRoot, type RunInputFrame } from "@cat-cave/qdcli-core";
+import { resolveProjectRoot, type RunInputFrame } from "@picomcp/core";
 import { readFile } from "node:fs/promises";
 import {
   convertCartridge,

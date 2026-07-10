@@ -1,11 +1,11 @@
 {
-  "name": "@cat-cave/qdcli-core",
-  "version": "0.2.1",
-  "description": "Core graph engine for Quick DAG CLI",
+  "name": "@picomcp/core",
+  "version": "0.1.0",
+  "description": "Shared PICO-8 cartridge primitives library for picoMCP",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cat-cave/qdcli.git",
+    "url": "git+https://github.com/nick-tsiones/picoMCP.git",
     "directory": "packages/core"
   },
   "files": [
