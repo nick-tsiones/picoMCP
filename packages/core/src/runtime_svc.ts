@@ -55,6 +55,7 @@ export interface RunCartResult {
   traces: RunTraceEntry[];
   performance: RunPerformance | null;
   error: RunErrorReport | null;
+  captureWarning?: string;
 }
 
 export interface ExportCartOptions {
@@ -145,6 +146,11 @@ export async function runCart(
   const runtimeError = parseRuntimeError(processResult.stdout);
   await rm(tempDir, { recursive: true, force: true });
 
+  const captureWarning =
+    capture !== "none" && (processResult.timedOut || captureAt > (parsedLog.frameCount ?? frames))
+      ? `capture-at frame ${captureAt} may exceed effective frame count`
+      : undefined;
+
   return {
     success:
       !processResult.timedOut &&
@@ -166,6 +172,7 @@ export async function runCart(
     traces: parsedLog.traces,
     performance: parsedLog.performance,
     error: runtimeError,
+    ...(captureWarning ? { captureWarning } : {}),
   };
 }
 

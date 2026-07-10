@@ -317,9 +317,15 @@ export function lintCart(cart: Cart): LintReport {
     const tab = cart.code[tabIdx] ?? "";
     const lines = tab.split("\n");
 
+    let functionDepth = 0;
+
     for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
       const line = lines[lineIdx] ?? "";
       const lineNum = lineIdx + 1;
+
+      const funcCount = (line.match(/\bfunction\b/g) || []).length;
+      const endCount = (line.match(/\bend\b/g) || []).length;
+      functionDepth += funcCount;
 
       for (const [fn, msg] of Object.entries(DEPRECATED_FUNCTIONS)) {
         const regex = new RegExp(`\\b${fn}\\s*\\(`);
@@ -364,7 +370,8 @@ export function lintCart(cart: Cart): LintReport {
           !PICO8_BUILTINS.has(varName) &&
           !LUA_KEYWORDS.has(varName) &&
           !/\.\s*$/.test(before) &&
-          !/\[\s*$/.test(before)
+          !/\[\s*$/.test(before) &&
+          functionDepth === 0
         ) {
           issues.push({
             line: lineNum,
@@ -374,6 +381,8 @@ export function lintCart(cart: Cart): LintReport {
           });
         }
       }
+
+      functionDepth -= endCount;
     }
   }
 

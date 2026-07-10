@@ -21,9 +21,9 @@ Analysis:
   picoMCP minify <file> [--rename] [--json]
 
 Assets:
-  picoMCP sprite get <file> --index <n> [--json]
-  picoMCP sprite set <file> --index <n> --pixels <64-values> [--json]
-  picoMCP sprite get-range <file> --start <n> --end <n> [--json]
+  picoMCP sprite get <file> --index <n> [--json]    (n is 0-based, 0-255)
+  picoMCP sprite set <file> --index <n> --pixels <64-values> [--json]    (n is 0-based, 0-255)
+  picoMCP sprite get-range <file> --start <n> --end <n> [--json]    (0-based)
   picoMCP sprite set-range <file> --sprites <json> [--json]
   picoMCP sprite export <file> --output <path.png> [--json]
   picoMCP sprite import <file> --input <path.png> [--json]
@@ -31,15 +31,16 @@ Assets:
   picoMCP map set <file> --x <n> --y <n> --tile <n> [--json]
   picoMCP map get-region <file> --x <n> --y <n> --width <n> --height <n> [--json]
   picoMCP map set-region <file> --x <n> --y <n> --values <json> [--json]
-  picoMCP sfx get <file> --index <n> [--json]
-  picoMCP sfx set <file> --index <n> --data <json> [--json]
+  picoMCP sfx get <file> --index <n> [--json]    (n is 0-based, 0-63)
+  picoMCP sfx set <file> --index <n> --data <json> [--json]    (n is 0-based, 0-63)
   picoMCP sfx list <file> [--json]
   picoMCP flags get <file> [--json]
   picoMCP flags set <file> --sprite <n> --value <n> [--json]
   picoMCP flags bulk <file> --pattern <values> [--json]
 
 Runtime:
-  picoMCP run <file> [--pico8 <path>] [--frames <n>] [--capture none|screen|gif] [--capture-at <n>] [--param <s>] [--input <json|@file.json>] [--json]
+  picoMCP run <file> [--pico8 <path>] [--frames <n>] [--capture none|screen|gif] [--capture-at <n>] [--param <s>] [--json]
+  Note: headless runs seed srand(1) for deterministic behavior. Re-seed in _init for variety.
   picoMCP export <file> --to web|native [--pico8 <path>] [--output <path>] [--json]
 
 Conversion:

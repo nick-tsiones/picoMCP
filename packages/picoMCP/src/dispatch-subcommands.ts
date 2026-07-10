@@ -19,7 +19,13 @@ import {
   spriteExportCmd,
   spriteImportCmd,
 } from "./commands.js";
-import { output, parsePositiveInteger, requiredArg, stringOpt } from "./dispatch-cli.js";
+import {
+  output,
+  parseNonNegativeInteger,
+  parsePositiveInteger,
+  requiredArg,
+  stringOpt,
+} from "./dispatch-cli.js";
 
 export async function dispatchSprite(
   root: string,
@@ -34,7 +40,7 @@ export async function dispatchSprite(
       await getSpriteCmd(
         root,
         requiredArg(spriteTarget, "cartridge file path"),
-        parsePositiveInteger(requiredArg(idx, "--index"), "sprite index") - 1,
+        parseNonNegativeInteger(requiredArg(idx, "--index"), "sprite index"),
       ),
       json,
     );
@@ -53,15 +59,17 @@ export async function dispatchSprite(
       await setSpriteCmd(
         root,
         requiredArg(spriteTarget, "cartridge file path"),
-        parsePositiveInteger(requiredArg(idx, "--index"), "sprite index") - 1,
+        parseNonNegativeInteger(requiredArg(idx, "--index"), "sprite index"),
         pixels,
       ),
       json,
     );
   } else if (spriteAction === "get-range") {
-    const start =
-      parsePositiveInteger(requiredArg(stringOpt(options.start), "--start"), "--start") - 1;
-    const end = parsePositiveInteger(requiredArg(stringOpt(options.end), "--end"), "--end") - 1;
+    const start = parseNonNegativeInteger(
+      requiredArg(stringOpt(options.start), "--start"),
+      "--start",
+    );
+    const end = parseNonNegativeInteger(requiredArg(stringOpt(options.end), "--end"), "--end");
     output(
       await getSpriteRangeCmd(root, requiredArg(spriteTarget, "cartridge file path"), start, end),
       json,
@@ -172,7 +180,7 @@ export async function dispatchSfx(
       await getSfxCmd(
         root,
         requiredArg(sfxTarget, "cartridge file path"),
-        parsePositiveInteger(requiredArg(idx, "--index"), "sfx index") - 1,
+        parseNonNegativeInteger(requiredArg(idx, "--index"), "sfx index"),
       ),
       json,
     );
@@ -194,7 +202,7 @@ export async function dispatchSfx(
       await setSfxCmd(
         root,
         requiredArg(sfxTarget, "cartridge file path"),
-        parsePositiveInteger(requiredArg(idx, "--index"), "sfx index") - 1,
+        parseNonNegativeInteger(requiredArg(idx, "--index"), "sfx index"),
         data,
       ),
       json,

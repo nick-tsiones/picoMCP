@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 import { runCli } from "../src/dispatch-cli.js";
 
-async function captureRun(args: string[]): Promise<{ stdout: string; stderr: string; exitCode?: number }> {
+async function captureRun(
+  args: string[],
+): Promise<{ stdout: string; stderr: string; exitCode?: number }> {
   const previousExitCode = process.exitCode;
   const output: string[] = [];
   const errors: string[] = [];
