@@ -39,6 +39,11 @@
         "name": "reference",
         "rank": 7,
         "created_at": "1970-01-01T00:00:00.000Z"
+      },
+      {
+        "name": "validation",
+        "rank": 8,
+        "created_at": "1970-01-01T00:00:00.000Z"
       }
     ]
   },
@@ -1208,6 +1213,71 @@
         "Coverage must not be achieved by deleting, weakening, or narrowing a scenario; all listed behaviors are exercised as written.",
         "Every acceptance clause has real-surface evidence in the completion report; missing or mock-only evidence for a real behavior is a P1 finding, not P3 polish."
       ]
+    },
+    {
+      "id": "menu-driven-game-collection",
+      "title": "Boot-to-menu game collection: Pong, Snake, and Flappy Bird clone",
+      "kind": "feature",
+      "milestone": "validation",
+      "status": "ready",
+      "priority": "P0",
+      "estimate_points": 8,
+      "risk": "medium",
+      "owner": null,
+      "branch": null,
+      "spec": "## Objective\nProve picoMCP end-to-end by authoring a boot-to-menu game collection cartridge entirely through the picoMCP CLI/MCP surface. The cartridge boots to a selector menu and launches one of three small games: Pong (vs computer), Snake, or a Flappy Bird clone.\n\n## Non-goals\nPolished game mechanics, sound effects, or artistic sprites beyond functional minimums.\n\n## SDD design slice\nAll picoMCP surfaces: cart_repo, static_svc, asset_svc, runtime_svc, cli_adapter, mcp_adapter.\n\n## Behaviors this node must prove\n- menu-driven-game-collection/cartridge-boots-to-a-selector-menu\n- menu-driven-game-collection/menu-lets-the-player-choose-pong-snake-or-flappy\n- menu-driven-game-collection/pong-runs-vs-computer-with-scoring\n- menu-driven-game-collection/snake-runs-with-self-collision-ending-the-game\n- menu-driven-game-collection/flappy-bird-clone-runs-with-obstacle-avoidance\n- menu-driven-game-collection/each-game-returns-to-the-menu-on-game-over\n- menu-driven-game-collection/all-games-fit-together-in-one-cartridge-under-token-and-compressed-size-limits\n\n## Tasks\n- [ ] Use picoMCP CLI to create the cartridge and write Lua code for the menu screen\n- [ ] Use picoMCP CLI to write Lua code for Pong (player paddle, computer paddle, ball, scoring)\n- [ ] Use picoMCP CLI to write Lua code for Snake (growing body, self-collision detection)\n- [ ] Use picoMCP CLI to write Lua code for Flappy Bird clone (gravity, obstacle pipes, scoring)\n- [ ] Use picoMCP CLI to draw simple sprites for each game (paddles, ball, snake segments, bird, pipes)\n- [ ] Use picoMCP CLI to wire the menu selection to each game's init function\n- [ ] Use picoMCP CLI to parse and lint the final cartridge\n- [ ] Use picoMCP CLI to report cartridge size and verify it fits within PICO-8 limits\n- [ ] Use picoMCP CLI to run each game headlessly and capture screenshots as evidence\n- [ ] Terminal: prove every behavior end-to-end via picoMCP CLI commands with real cartridge output\n\n## Real-world dependencies\nDepends on all 22 picoMCP DAG nodes (reading, writing, editing, parsing, linting, minifying, size-reporting, sprites, map, sound effects, running headlessly, exporting). Requires a working PICO-8 binary and xvfb-run.\n\n## Rollback\nDelete the output cartridge and its screenshots.",
+      "acceptance": "the cartridge boots to a menu with three game choices selecting Pong starts an interactive paddle-vs-computer match with scoring and game-over return to menu selecting Snake starts the snake game with food collection and self-collision ending the game selecting Flappy Bird starts the bird-flying game with scrolling pipes and collision detection each game returns to the menu on game over the entire cartridge fits within token and compressed size limits",
+      "validation": null,
+      "context": null,
+      "created_at": "2026-07-10T17:41:55.898Z",
+      "updated_at": "2026-07-10T17:42:21.215Z",
+      "claimed_at": null,
+      "done_at": null,
+      "group_name": null,
+      "status_reason": null,
+      "check_command": null,
+      "ci_command": null,
+      "blocked_by": null,
+      "blocked_reason": null,
+      "blocked_owner": null,
+      "projects": [],
+      "verification": [
+        {
+          "type": "command",
+          "value": "<prove menu-driven-game-collection/cartridge-boots-to-a-selector-menu via picoMCP CLI>"
+        },
+        {
+          "type": "command",
+          "value": "<prove menu-driven-game-collection/menu-lets-the-player-choose-pong-snake-or-flappy via picoMCP CLI>"
+        },
+        {
+          "type": "command",
+          "value": "<prove menu-driven-game-collection/pong-runs-vs-computer-with-scoring via picoMCP CLI>"
+        },
+        {
+          "type": "command",
+          "value": "<prove menu-driven-game-collection/snake-runs-with-self-collision-ending-the-game via picoMCP CLI>"
+        },
+        {
+          "type": "command",
+          "value": "<prove menu-driven-game-collection/flappy-bird-clone-runs-with-obstacle-avoidance via picoMCP CLI>"
+        },
+        {
+          "type": "command",
+          "value": "<prove menu-driven-game-collection/each-game-returns-to-the-menu-on-game-over via picoMCP CLI>"
+        },
+        {
+          "type": "command",
+          "value": "<prove menu-driven-game-collection/all-games-fit-together-in-one-cartridge-under-token-and-compressed-size-limits via picoMCP CLI>"
+        }
+      ],
+      "audit_focus": [
+        "Each verification drives the real picoMCP CLI end-to-end; reject proofs that stub or mock the cartridge.",
+        "Reject tautological, hard-coded, or assert-true checks; every acceptance clause must assert on observable CLI output or screenshots.",
+        "Negation check: the proof must FAIL if the behavior is removed or broken.",
+        "Coverage must not be achieved by deleting, weakening, or narrowing a scenario; all listed behaviors are exercised as written.",
+        "Every acceptance clause has real-surface evidence in the completion report."
+      ]
     }
   ],
   "edges": [
@@ -1678,6 +1748,66 @@
       "to_node": "toolbox-contract",
       "type": "requires",
       "created_at": "2026-07-03T03:07:55.281Z"
+    },
+    {
+      "from_node": "bootstrap-repo-git-gh",
+      "to_node": "menu-driven-game-collection",
+      "type": "requires",
+      "created_at": "2026-07-10T17:42:06.652Z"
+    },
+    {
+      "from_node": "bootstrap-qd-config",
+      "to_node": "menu-driven-game-collection",
+      "type": "requires",
+      "created_at": "2026-07-10T17:42:06.721Z"
+    },
+    {
+      "from_node": "bootstrap-runtime-environment",
+      "to_node": "menu-driven-game-collection",
+      "type": "requires",
+      "created_at": "2026-07-10T17:42:06.782Z"
+    },
+    {
+      "from_node": "reading-cartridges",
+      "to_node": "menu-driven-game-collection",
+      "type": "requires",
+      "created_at": "2026-07-10T17:42:06.841Z"
+    },
+    {
+      "from_node": "writing-code",
+      "to_node": "menu-driven-game-collection",
+      "type": "requires",
+      "created_at": "2026-07-10T17:42:06.896Z"
+    },
+    {
+      "from_node": "editing-code",
+      "to_node": "menu-driven-game-collection",
+      "type": "requires",
+      "created_at": "2026-07-10T17:42:06.953Z"
+    },
+    {
+      "from_node": "editing-sprites",
+      "to_node": "menu-driven-game-collection",
+      "type": "requires",
+      "created_at": "2026-07-10T17:42:07.012Z"
+    },
+    {
+      "from_node": "running-a-cartridge-headlessly",
+      "to_node": "menu-driven-game-collection",
+      "type": "requires",
+      "created_at": "2026-07-10T17:42:07.069Z"
+    },
+    {
+      "from_node": "reporting-size-against-the-limits",
+      "to_node": "menu-driven-game-collection",
+      "type": "requires",
+      "created_at": "2026-07-10T17:42:07.124Z"
+    },
+    {
+      "from_node": "linting-code",
+      "to_node": "menu-driven-game-collection",
+      "type": "requires",
+      "created_at": "2026-07-10T17:42:07.181Z"
     }
   ],
   "findings": [],

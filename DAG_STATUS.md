@@ -1,56 +1,52 @@
 # DAG Status
 
-- Total nodes: 22
-- Done: 22 (52/52 pts)
+- Total nodes: 23
+- Done: 22 (52/60 pts)
+- Ready: 1 (8 pts)
 - Blocked: 0
-- Ready: 0
 - Review: 0
 - Claimed: 0
-- Remaining points: 0
+- Remaining points: 8
 
-## All nodes complete
+## Nodes
 
-All 22 DAG nodes are done across all 7 milestones:
-
-### bootstrap (3/3)
-
+### bootstrap (3/3) — done
 - bootstrap-repo-git-gh: done
 - bootstrap-qd-config: done
 - bootstrap-runtime-environment: done
 
-### platform (3/3)
-
+### platform (3/3) — done
 - environment-and-capability-detection: done
 - project-and-path-boundaries: done
 - toolbox-contract: done
 
-### static-core (5/5)
-
+### static-core (6/6) — done
 - reading-cartridges: done
 - writing-code: done
 - editing-code: done
 - parsing-code: done
 - linting-code: done
-
-### static-advanced (2/2)
-
 - reporting-size-against-the-limits: done
+
+### static-advanced (2/2) — done
 - minifying-code: done
 - converting-cartridge-formats: done
 
-### assets (5/5)
-
+### assets (5/5) — done
 - editing-sprites: done
 - editing-sprite-flags: done
 - editing-the-map: done
 - sprite-sheet-images: done
 - editing-sound-effects: done
 
-### runtime (2/2)
-
+### runtime (2/2) — done
 - running-a-cartridge-headlessly: done
 - exporting-a-distributable: done
 
-### reference (1/1)
-
+### reference (1/1) — done
 - reference-data: done
+
+### validation (0/1)
+- menu-driven-game-collection: ready (P0, 8 pts)
+  - Boot-to-menu game selector with Pong, Snake, and Flappy Bird clone
+  - verifications: 7
