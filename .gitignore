@@ -8,3 +8,5 @@ logs/
 dist/
 *.log
 .DS_Store
+.qd-runtime/
+*.tsbuildinfo
