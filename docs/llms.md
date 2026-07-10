@@ -202,7 +202,7 @@ used, which commands ran, and where the logs/artifacts live. If required
 validation cannot run, block, split, or revise the node instead of completing
 it.
 
-When delegation needs durable ownership records, use assignments. Assignment owners are opaque strings; examples may be `human:trevor`, `external:worker-1`, `github-actions:<run-id>`, or any other harness-owned identifier. qd records ownership and evidence, but it does not launch or control that worker.
+When delegation needs durable ownership records, use assignments. Assignment owners are opaque strings; examples may be `human:dev`, `external:worker-1`, `github-actions:<run-id>`, or any other harness-owned identifier. qd records ownership and evidence, but it does not launch or control that worker.
 
 ```sh
 qd assignment add <node> --role worker --owner external:worker-1 --branch worker/<node> --worktree /scratch/worktrees/<repo>-worker-<node>

@@ -410,7 +410,7 @@ describe("CLI schema contracts", () => {
         nodeId: "a",
         type: "credential",
         reason: "API key expired.",
-        owner: "trevor",
+        owner: "dev",
         needed: "Refresh key.",
         evidence: "logs/401.log",
       }),

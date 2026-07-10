@@ -230,7 +230,7 @@ describe("graph node state and bulk writes", () => {
       status: "blocked",
       blockedBy: "manual",
       blockedReason: "Fixture approval is pending.",
-      blockedOwner: "trevor",
+      blockedOwner: "dev",
       spec: "Wait for review",
       acceptance: "Review is signed off",
     });

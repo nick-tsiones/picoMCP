@@ -110,7 +110,7 @@ describe("qd CLI dispatcher branches", () => {
       "--reason",
       "Requires owner action.",
       "--owner",
-      "trevor",
+      "dev",
       "--needed",
       "Owner action is completed.",
       "--evidence",

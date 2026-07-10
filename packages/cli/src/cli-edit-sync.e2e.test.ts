@@ -37,7 +37,7 @@ describe("qd CLI edit and sync surfaces", () => {
       "--reason",
       "Physical-presence-only SSH/firewall/networking no-go; requires owner console and recovery plan.",
       "--owner",
-      "trevor",
+      "dev",
       "--needed",
       "Create owner console and recovery plan before changing SSH/firewall/networking.",
       "--evidence",
@@ -145,7 +145,7 @@ describe("qd CLI edit and sync surfaces", () => {
       "--reason",
       "Requires owner console access.",
       "--owner",
-      "trevor",
+      "dev",
       "--needed",
       "Owner console must be available.",
       "--evidence",
@@ -183,7 +183,7 @@ describe("qd CLI edit and sync surfaces", () => {
       status: "blocked",
       blocked_by: "manual",
       blocked_reason: "Requires owner console access before proceeding.",
-      blocked_owner: "trevor",
+      blocked_owner: "dev",
     };
     await writeFile(exportPath, `${JSON.stringify(snapshot, null, 2)}\n`, "utf8");
 

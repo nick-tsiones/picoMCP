@@ -276,7 +276,7 @@ Example:
 ```text
 type: credential
 reason: Local API key expired; live provider validation cannot run.
-owner: trevor
+owner: dev
 needed: Refresh API key and verify GET /v1/accounts succeeds.
 scope: local
 evidence: logs/provider-auth-401.log

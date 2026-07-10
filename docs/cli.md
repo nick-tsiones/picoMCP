@@ -251,7 +251,7 @@ Use structured blockers for project state outside dependency edges:
 qd block xp3-fixture \
   --type manual \
   --reason "Fixture provenance review pending" \
-  --owner trevor \
+  --owner dev \
   --needed "Owner approves fixture provenance and redaction notes." \
   --evidence reports/xp3-fixture-provenance-blocker.md
 qd unblock xp3-fixture \
@@ -278,8 +278,8 @@ Use a workspace config:
 
 ```toml
 repos = [
-  "/home/trevor/projects/app-a",
-  "/home/trevor/projects/app-b",
+  "/home/dev/projects/app-a",
+  "/home/dev/projects/app-b",
 ]
 ```
 

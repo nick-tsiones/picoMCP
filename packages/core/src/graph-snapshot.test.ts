@@ -119,7 +119,7 @@ describe("graph snapshots", () => {
       ciCommand: "just ci-a",
       blockedBy: "manual",
       blockedReason: "Fixture approval is pending.",
-      blockedOwner: "trevor",
+      blockedOwner: "dev",
     });
     await updateNode(root, "a", { owner: "external:worker", branch: "spec/a" });
     const audit = await startRun(root, "a", "audit", {

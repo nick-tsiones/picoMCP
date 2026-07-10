@@ -97,7 +97,7 @@ Canonical qd exports preserve typed blockers on the node:
   "status": "blocked",
   "blockedBy": "credential",
   "blockedReason": "Fixture provenance review has not been signed off.",
-  "blockedOwner": "trevor",
+  "blockedOwner": "dev",
   "spec": "Wait for the review outcome before dispatching implementation.",
   "acceptance": "The provenance review is signed off and recorded."
 }

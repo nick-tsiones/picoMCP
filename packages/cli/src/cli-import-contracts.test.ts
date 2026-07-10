@@ -33,7 +33,7 @@ describe("CLI import mapping contracts", () => {
         statusReason: "imported",
         blockedBy: "manual",
         blockedReason: "owner action",
-        blockedOwner: "trevor",
+        blockedOwner: "dev",
       },
       0,
       {
@@ -78,7 +78,7 @@ describe("CLI import mapping contracts", () => {
       statusReason: "imported",
       blockedBy: "manual",
       blockedReason: "owner action",
-      blockedOwner: "trevor",
+      blockedOwner: "dev",
     });
     expect(report.defaults).toEqual([]);
   });

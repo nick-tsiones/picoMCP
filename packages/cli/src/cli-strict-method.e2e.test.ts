@@ -236,7 +236,7 @@ describe("qd strict orchestration method", () => {
       "--reason",
       "Local provider API key is expired; live validation cannot run.",
       "--owner",
-      "trevor",
+      "dev",
       "--needed",
       "Refresh the key and prove GET /v1/accounts succeeds.",
       "--evidence",

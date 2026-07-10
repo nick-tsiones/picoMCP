@@ -298,8 +298,8 @@ For multiple repositories, keep each repo's qd DAG local to that repo. Use works
 ```toml
 # ~/.config/qd/workspaces.toml
 repos = [
-  "/home/trevor/projects/app-a",
-  "/home/trevor/projects/app-b",
+  "/home/dev/projects/app-a",
+  "/home/dev/projects/app-b",
 ]
 ```
 
