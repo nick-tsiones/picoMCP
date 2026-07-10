@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vp run @cat-cave/qdcli-core#build && vp run @cat-cave/qdcli#build",
+    "build": "vp run @cat-cave/qdcli-core#build && vp run @cat-cave/qdcli#build && vp run picomcp#build",
     "changeset": "changeset",
     "ci": "pnpm run build && vp check && vp test run --coverage && vp run typecheck:tsgo",
     "coverage": "vp test run --coverage",
