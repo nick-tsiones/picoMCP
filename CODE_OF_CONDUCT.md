@@ -13,4 +13,4 @@ We pledge to make participation in our project a harassment-free experience for 
 
 ## Enforcement
 
-Report issues to ntsiones@outlook.com.
+Report issues via GitHub Issues.

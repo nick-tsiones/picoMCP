@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-Email ntsiones@outlook.com. Do not open a public issue.
+Report via GitHub Issues with the security label. For sensitive reports, use GitHub's private vulnerability reporting.
 
 ## Supported versions
 
