@@ -7,7 +7,7 @@ Email ntsiones@outlook.com. Do not open a public issue.
 ## Supported versions
 
 | Version | Supported |
-|---------|-----------|
+| ------- | --------- |
 | 0.1.x   | Yes       |
 
 ## Trust model

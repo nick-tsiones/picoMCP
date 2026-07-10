@@ -9,7 +9,7 @@
 
 ```sh
 pnpm run format   # auto-format all files
-pnpm run lint     # check for lint errors  
+pnpm run lint     # check for lint errors
 pnpm run typecheck # type-check TypeScript
 pnpm run build    # build all packages
 pnpm run test     # run all tests

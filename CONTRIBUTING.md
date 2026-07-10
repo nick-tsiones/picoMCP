@@ -32,6 +32,7 @@ corepack pnpm run build
 ## Reporting issues
 
 Use GitHub Issues. Include:
+
 - picoMCP version (`picomcp --version`)
 - PICO-8 version
 - Steps to reproduce

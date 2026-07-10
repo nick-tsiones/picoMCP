@@ -1,19 +1,20 @@
 ---
 name: Bug report
 about: Report a bug in picoMCP
-title: ''
+title: ""
 labels: bug
-assignees: ''
+assignees: ""
 ---
 
 **Version**: `picomcp --version`
-**PICO-8 version**: 
-**Platform**: 
+**PICO-8 version**:
+**Platform**:
 
 **Steps to reproduce**:
-1. 
-2. 
-3. 
+
+1.
+2.
+3.
 
 **Expected behavior**:
 

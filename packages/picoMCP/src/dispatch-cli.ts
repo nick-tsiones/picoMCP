@@ -282,9 +282,7 @@ async function handleWrite(
   output(await writeCartridge(root, filePath, code, tabIndex), json);
 }
 
-async function parseInputOption(
-  value: string,
-): Promise<RunInputFrame[]> {
+async function parseInputOption(value: string): Promise<RunInputFrame[]> {
   let raw: string;
   if (value.startsWith("@")) {
     raw = await readFile(value.slice(1), "utf8");
@@ -307,7 +305,9 @@ async function parseInputOption(
       typeof (entry as Record<string, unknown>).frame !== "number" ||
       !Array.isArray((entry as Record<string, unknown>).hold)
     ) {
-      throw new Error('Each --input entry must have "frame" (number) and "hold" (array of numbers)');
+      throw new Error(
+        'Each --input entry must have "frame" (number) and "hold" (array of numbers)',
+      );
     }
   }
   return parsed as RunInputFrame[];

@@ -1,12 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import {
-  getSfx,
-  setSfx,
-  parseSfxLine,
-  serializeSfxLine,
-  listSfx,
-  type Sfx,
-} from "./index.js";
+import { getSfx, setSfx, parseSfxLine, serializeSfxLine, listSfx, type Sfx } from "./index.js";
 
 describe("sfx serialization", () => {
   it("round-trip: setSfx with known notes → getSfx → verify notes match", () => {
@@ -39,9 +32,7 @@ describe("sfx serialization", () => {
       speed: 8,
       loopStart: 1,
       loopEnd: 2,
-      notes: [
-        { pitch: 36, instr: 7, vol: 3, fx: 0 },
-      ],
+      notes: [{ pitch: 36, instr: 7, vol: 3, fx: 0 }],
     };
 
     const line = serializeSfxLine(sfx);
@@ -77,9 +68,9 @@ describe("sfx serialization", () => {
       loopStart: 4,
       loopEnd: 12,
       notes: [
-        { pitch:51, instr:2, vol:6, fx:0 },
-        { pitch:0, instr:1, vol:0, fx:0 },
-        { pitch:63, instr:15, vol:7, fx:7 },
+        { pitch: 51, instr: 2, vol: 6, fx: 0 },
+        { pitch: 0, instr: 1, vol: 0, fx: 0 },
+        { pitch: 63, instr: 15, vol: 7, fx: 7 },
       ],
     };
 
@@ -146,11 +137,16 @@ describe("sfx serialization", () => {
 
   it("listSfx counts non-zero notes correctly", () => {
     const sfxArr: unknown[] = [];
-    setSfx(sfxArr, 0, { speed: 0, loopStart: 0, loopEnd: 0, notes: [
-      { pitch: 1, instr: 0, vol: 0, fx: 0 },
-      { pitch: 2, instr: 0, vol: 0, fx: 0 },
-      { pitch: 3, instr: 0, vol: 0, fx: 0 },
-    ]});
+    setSfx(sfxArr, 0, {
+      speed: 0,
+      loopStart: 0,
+      loopEnd: 0,
+      notes: [
+        { pitch: 1, instr: 0, vol: 0, fx: 0 },
+        { pitch: 2, instr: 0, vol: 0, fx: 0 },
+        { pitch: 3, instr: 0, vol: 0, fx: 0 },
+      ],
+    });
     setSfx(sfxArr, 1, { speed: 0, loopStart: 0, loopEnd: 0, notes: [] });
 
     const list = listSfx(sfxArr);
@@ -163,7 +159,9 @@ describe("sfx serialization", () => {
 
     for (let p = 0; p <= 63; p++) {
       setSfx(sfxArr, p, {
-        speed: 0, loopStart: 0, loopEnd: 0,
+        speed: 0,
+        loopStart: 0,
+        loopEnd: 0,
         notes: [{ pitch: p, instr: 5, vol: 3, fx: 0 }],
       });
     }
@@ -179,7 +177,9 @@ describe("sfx serialization", () => {
 
     for (let v = 0; v <= 7; v++) {
       setSfx(sfxArr, v, {
-        speed: 0, loopStart: 0, loopEnd: 0,
+        speed: 0,
+        loopStart: 0,
+        loopEnd: 0,
         notes: [{ pitch: 40, instr: 0, vol: v, fx: 0 }],
       });
     }
@@ -195,7 +195,9 @@ describe("sfx serialization", () => {
 
     for (let f = 0; f <= 7; f++) {
       setSfx(sfxArr, f, {
-        speed: 0, loopStart: 0, loopEnd: 0,
+        speed: 0,
+        loopStart: 0,
+        loopEnd: 0,
         notes: [{ pitch: 40, instr: 0, vol: 0, fx: f }],
       });
     }

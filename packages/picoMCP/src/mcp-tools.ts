@@ -98,7 +98,7 @@ export const MCP_TOOLS: McpTool[] = [
         input: {
           type: "string",
           description:
-            'JSON array of {frame, hold} entries for scripted button injection (hold: array of PICO-8 button numbers 0-11)',
+            "JSON array of {frame, hold} entries for scripted button injection (hold: array of PICO-8 button numbers 0-11)",
         },
       },
       required: ["filePath"],
