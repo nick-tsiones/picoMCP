@@ -10,3 +10,9 @@ dist/
 .DS_Store
 .qd-runtime/
 *.tsbuildinfo
+BEHAVIORS.jsonl
+DAG_STATUS.md
+PROPOSAL.md
+SDD.md
+pico-8_0.2.7_amd64.zip
+games.p8
