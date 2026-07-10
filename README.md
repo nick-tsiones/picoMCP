@@ -3,9 +3,9 @@
 A standalone CLI and MCP (Model Context Protocol) server for PICO-8 cartridges — built for AI coding agents to read, write, edit, lint, minify, run, and export PICO-8 programs through a clean, composable tool surface.
 
 ```sh
-picoMCP --version   # picoMCP 0.1.0
-picoMCP --help      # 31 commands available
-picoMCP serve        # start MCP server for AI agent integration
+picomcp --version   # picoMCP 0.1.0
+picomcp --help      # 31 commands available
+picomcp serve        # start MCP server for AI agent integration
 ```
 
 ## Install
@@ -37,77 +37,77 @@ npm uninstall -g picomcp         # for global npm installs
 ### Reading cartridges
 
 ```sh
-picoMCP read mygame.p8 --json           # overview: code, size, assets
-picoMCP read mygame.p8 --tab 1 --json    # read a single code tab
+picomcp read mygame.p8 --json           # overview: code, size, assets
+picomcp read mygame.p8 --tab 1 --json    # read a single code tab
 ```
 
 ### Writing and editing
 
 ```sh
-picoMCP write mygame.p8 --code="cls()\nprint('hi')" --json
-picoMCP write mygame.p8 --code="x=1" --tab 2 --json
-picoMCP edit mygame.p8 range --from 1 --to 3 --code="new lines" --json
-picoMCP edit mygame.p8 replace --find "old" --replace "new" --json
-picoMCP edit mygame.p8 append --code="function _draw() end" --json
+picomcp write mygame.p8 --code="cls()\nprint('hi')" --json
+picomcp write mygame.p8 --code="x=1" --tab 2 --json
+picomcp edit mygame.p8 range --from 1 --to 3 --code="new lines" --json
+picomcp edit mygame.p8 replace --find "old" --replace "new" --json
+picomcp edit mygame.p8 append --code="function _draw() end" --json
 ```
 
 ### Static analysis
 
 ```sh
-picoMCP parse mygame.p8 --json           # syntax check with error locations
-picoMCP lint mygame.p8 --json            # lint for common issues
-picoMCP size mygame.p8 --json            # token, char, and compressed sizes
-picoMCP minify mygame.p8 --json          # safe or aggressive minification
+picomcp parse mygame.p8 --json           # syntax check with error locations
+picomcp lint mygame.p8 --json            # lint for common issues
+picomcp size mygame.p8 --json            # token, char, and compressed sizes
+picomcp minify mygame.p8 --json          # safe or aggressive minification
 ```
 
 ### Sprites
 
 ```sh
-picoMCP sprite get mygame.p8 --index 1 --json
-picoMCP sprite set mygame.p8 --index 1 --grid "0,1,2,..." --json
-picoMCP sprite export mygame.p8 --output sheet.png
-picoMCP sprite import mygame.p8 --file icon.png --index 0
+picomcp sprite get mygame.p8 --index 1 --json
+picomcp sprite set mygame.p8 --index 1 --grid "0,1,2,..." --json
+picomcp sprite export mygame.p8 --output sheet.png
+picomcp sprite import mygame.p8 --file icon.png --index 0
 ```
 
 ### Map
 
 ```sh
-picoMCP map get mygame.p8 --json
-picoMCP map set mygame.p8 --x 0 --y 0 --grid "1,2,3,..." --json
-picoMCP map get-region mygame.p8 --x 0 --y 0 --w 16 --h 16 --json
+picomcp map get mygame.p8 --json
+picomcp map set mygame.p8 --x 0 --y 0 --grid "1,2,3,..." --json
+picomcp map get-region mygame.p8 --x 0 --y 0 --w 16 --h 16 --json
 ```
 
 ### Sound effects
 
 ```sh
-picoMCP sfx list mygame.p8 --json
-picoMCP sfx get mygame.p8 --index 0 --json
-picoMCP sfx set mygame.p8 --index 0 --data='{"notes":[{"pitch":24,"instr":1,"vol":3,"fx":0}],"speed":12,"loopStart":0,"loopEnd":0}' --json
+picomcp sfx list mygame.p8 --json
+picomcp sfx get mygame.p8 --index 0 --json
+picomcp sfx set mygame.p8 --index 0 --data='{"notes":[{"pitch":24,"instr":1,"vol":3,"fx":0}],"speed":12,"loopStart":0,"loopEnd":0}' --json
 ```
 
 ### Format conversion
 
 ```sh
-picoMCP convert mygame.p8 --to p8.png                # .p8 → cartridge image
-picoMCP convert mygame.p8.png --to p8                 # cartridge image → .p8
+picomcp convert mygame.p8 --to p8.png                # .p8 → cartridge image
+picomcp convert mygame.p8.png --to p8                 # cartridge image → .p8
 ```
 
 ### Sprite flags
 
 ```sh
-picoMCP flags get mygame.p8 --json
-picoMCP flags set mygame.p8 --sprite 1 --value 255 --json
-picoMCP flags bulk mygame.p8 --pattern "0,0,1,1,..." --json
+picomcp flags get mygame.p8 --json
+picomcp flags set mygame.p8 --sprite 1 --value 255 --json
+picomcp flags bulk mygame.p8 --pattern "0,0,1,1,..." --json
 ```
 
 ### Running and exporting
 
 ```sh
-picoMCP run mygame.p8 --json                    # headless execution
-picoMCP run mygame.p8 --capture screen --frames 60 --json   # with screenshot
-picoMCP run mygame.p8 --capture gif --frames 120 --json     # animated capture
-picoMCP export mygame.p8 --to web --output dist/game.html
-picoMCP export mygame.p8 --to native --output dist/game.bin
+picomcp run mygame.p8 --json                    # headless execution
+picomcp run mygame.p8 --capture screen --frames 60 --json   # with screenshot
+picomcp run mygame.p8 --capture gif --frames 120 --json     # animated capture
+picomcp export mygame.p8 --to web --output dist/game.html
+picomcp export mygame.p8 --to native --output dist/game.bin
 ```
 
 Note: PICO-8 headless runs seed `srand(1)` for deterministic output. Re-seed in `_init()` if your game needs random variety. A `--capture-at` value greater than the frame count (or a timeout kill with exit code 124) does not mean the capture failed — a partial capture may still be valid.
@@ -117,8 +117,8 @@ Note: PICO-8 headless runs seed `srand(1)` for deterministic output. Re-seed in 
 ### PICO-8 reference
 
 ```sh
-picoMCP ref api --json          # full PICO-8 API reference
-picoMCP ref pitfalls --json     # Lua pitfalls guide for PICO-8
+picomcp ref api --json          # full PICO-8 API reference
+picomcp ref pitfalls --json     # Lua pitfalls guide for PICO-8
 ````
 
 ## MCP Server
@@ -126,7 +126,7 @@ picoMCP ref pitfalls --json     # Lua pitfalls guide for PICO-8
 Start the MCP server for AI agent integration:
 
 ```sh
-picoMCP serve
+picomcp serve
 ```
 
 The server speaks JSON-RPC 2.0 over stdio. All 31 CLI commands are exposed as MCP tools with matching names (`picoMCP_read`, `picoMCP_write`, `picoMCP_run`, etc.).
@@ -163,7 +163,7 @@ The server speaks JSON-RPC 2.0 over stdio. All 31 CLI commands are exposed as MC
 ### Quick MCP test
 
 ```sh
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | picoMCP serve
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' picomcp serve
 ```
 
 ## Development
@@ -194,4 +194,4 @@ Use [GitHub Issues](https://github.com/nick-tsiones/picoMCP/issues). Include `pi
 
 ## License
 
-Proprietary.
+MIT

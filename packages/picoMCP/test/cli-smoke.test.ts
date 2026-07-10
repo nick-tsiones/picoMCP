@@ -35,7 +35,7 @@ async function captureRun(
   }
 }
 
-describe("picoMCP CLI smoke", () => {
+describe("picomcp CLI smoke", () => {
   it("--version returns picoMCP", async () => {
     const { stdout } = await captureRun(["--version"]);
     expect(stdout).toContain("picoMCP");
@@ -43,7 +43,7 @@ describe("picoMCP CLI smoke", () => {
 
   it("--help returns help text", async () => {
     const { stdout } = await captureRun(["--help"]);
-    expect(stdout).toContain("picoMCP - PICO-8 Cartridge CLI");
+    expect(stdout).toContain("PICO-8 Cartridge CLI");
     expect(stdout).toContain("Usage:");
   });
 

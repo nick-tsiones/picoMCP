@@ -10,7 +10,7 @@ export interface McpTool {
 
 export const MCP_TOOLS: McpTool[] = [
   {
-    name: "picoMCP_read",
+    name: "picomcp_read",
     description:
       "Read an overview of a PICO-8 cartridge including code, tab count, token count, and asset summary",
     inputSchema: {
@@ -22,7 +22,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
-    name: "picoMCP_read_tab",
+    name: "picomcp_read_tab",
     description: "Read a single code tab from a PICO-8 cartridge",
     inputSchema: {
       type: "object",
@@ -34,7 +34,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
-    name: "picoMCP_write",
+    name: "picomcp_write",
     description:
       "Write code to a PICO-8 cartridge tab, creating the cartridge if it does not exist",
     inputSchema: {
@@ -48,7 +48,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
-    name: "picoMCP_parse",
+    name: "picomcp_parse",
     description: "Parse and validate PICO-8 cartridge code syntax",
     inputSchema: {
       type: "object",
@@ -59,7 +59,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
-    name: "picoMCP_lint",
+    name: "picomcp_lint",
     description: "Lint PICO-8 cartridge code for common issues",
     inputSchema: {
       type: "object",
@@ -70,7 +70,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
-    name: "picoMCP_size",
+    name: "picomcp_size",
     description: "Report cartridge size against PICO-8 limits",
     inputSchema: {
       type: "object",
@@ -81,7 +81,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
-    name: "picoMCP_run",
+    name: "picomcp_run",
     description: "Run a PICO-8 cartridge headlessly and return output",
     inputSchema: {
       type: "object",
@@ -105,7 +105,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
-    name: "picoMCP_export",
+    name: "picomcp_export",
     description: "Export a PICO-8 cartridge as a web build or native binary",
     inputSchema: {
       type: "object",
@@ -119,7 +119,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
-    name: "picoMCP_convert",
+    name: "picomcp_convert",
     description: "Convert between .p8 and .p8.png cartridge formats",
     inputSchema: {
       type: "object",
@@ -132,7 +132,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
-    name: "picoMCP_flags_get",
+    name: "picomcp_flags_get",
     description: "Read all sprite flags from a PICO-8 cartridge",
     inputSchema: {
       type: "object",
@@ -143,7 +143,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
-    name: "picoMCP_flags_set",
+    name: "picomcp_flags_set",
     description: "Set a single sprite flag on a PICO-8 cartridge",
     inputSchema: {
       type: "object",
@@ -156,7 +156,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
-    name: "picoMCP_sprite_get",
+    name: "picomcp_sprite_get",
     description: "Read a sprite as an 8x8 colour grid",
     inputSchema: {
       type: "object",
@@ -168,7 +168,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
-    name: "picoMCP_sprite_set",
+    name: "picomcp_sprite_set",
     description: "Write a sprite from an 8x8 colour grid (64 values, 0-15)",
     inputSchema: {
       type: "object",
@@ -181,7 +181,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
-    name: "picoMCP_map_get",
+    name: "picomcp_map_get",
     description: "Read a single cell from the cartridge map",
     inputSchema: {
       type: "object",
@@ -194,7 +194,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
-    name: "picoMCP_map_set",
+    name: "picomcp_map_set",
     description: "Set a single cell on the cartridge map",
     inputSchema: {
       type: "object",
@@ -208,7 +208,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
-    name: "picoMCP_sfx_get",
+    name: "picomcp_sfx_get",
     description: "Read a sound effect from a PICO-8 cartridge",
     inputSchema: {
       type: "object",
@@ -220,7 +220,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
-    name: "picoMCP_sfx_set",
+    name: "picomcp_sfx_set",
     description: "Write a sound effect to a PICO-8 cartridge",
     inputSchema: {
       type: "object",
@@ -233,7 +233,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
-    name: "picoMCP_minify",
+    name: "picomcp_minify",
     description: "Minify PICO-8 cartridge code to save space",
     inputSchema: {
       type: "object",
@@ -245,7 +245,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
-    name: "picoMCP_edit_range",
+    name: "picomcp_edit_range",
     description: "Replace a specific range of lines in a cartridge",
     inputSchema: {
       type: "object",
@@ -259,7 +259,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
-    name: "picoMCP_edit_replace",
+    name: "picomcp_edit_replace",
     description: "Find and replace text in a cartridge",
     inputSchema: {
       type: "object",
@@ -272,7 +272,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
-    name: "picoMCP_edit_append",
+    name: "picomcp_edit_append",
     description: "Append code to the end of a cartridge",
     inputSchema: {
       type: "object",
@@ -284,7 +284,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
-    name: "picoMCP_flags_bulk",
+    name: "picomcp_flags_bulk",
     description: "Set all sprite flags at once on a PICO-8 cartridge",
     inputSchema: {
       type: "object",
@@ -299,7 +299,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
-    name: "picoMCP_sprite_get_range",
+    name: "picomcp_sprite_get_range",
     description: "Read a range of sprites from a PICO-8 cartridge",
     inputSchema: {
       type: "object",
@@ -312,7 +312,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
-    name: "picoMCP_sprite_set_range",
+    name: "picomcp_sprite_set_range",
     description: "Write a range of sprites to a PICO-8 cartridge",
     inputSchema: {
       type: "object",
@@ -328,7 +328,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
-    name: "picoMCP_sprite_export",
+    name: "picomcp_sprite_export",
     description: "Export the sprite sheet as a PNG image",
     inputSchema: {
       type: "object",
@@ -340,7 +340,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
-    name: "picoMCP_sprite_import",
+    name: "picomcp_sprite_import",
     description: "Import a sprite sheet from a PNG image",
     inputSchema: {
       type: "object",
@@ -352,7 +352,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
-    name: "picoMCP_map_get_region",
+    name: "picomcp_map_get_region",
     description: "Read a rectangular region of the cartridge map",
     inputSchema: {
       type: "object",
@@ -367,7 +367,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
-    name: "picoMCP_map_set_region",
+    name: "picomcp_map_set_region",
     description: "Write a rectangular region of the cartridge map",
     inputSchema: {
       type: "object",
@@ -381,7 +381,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
-    name: "picoMCP_sfx_list",
+    name: "picomcp_sfx_list",
     description: "List all defined sound effects in a PICO-8 cartridge",
     inputSchema: {
       type: "object",
@@ -392,7 +392,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
-    name: "picoMCP_ref_api",
+    name: "picomcp_ref_api",
     description: "Retrieve the PICO-8 function reference",
     inputSchema: {
       type: "object",
@@ -400,7 +400,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
-    name: "picoMCP_ref_pitfalls",
+    name: "picomcp_ref_pitfalls",
     description: "Retrieve the guide to PICO-8 Lua pitfalls",
     inputSchema: {
       type: "object",

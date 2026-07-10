@@ -1,57 +1,57 @@
 export const HELP_TEXT = `picoMCP - PICO-8 Cartridge CLI and MCP Server
 
-Usage: picoMCP <command> [options]
+Usage: picomcp <command> [options]
 
 Reading cartridges:
-  picoMCP read <file> [--json]
-  picoMCP read <file> --tab <n> [--json]
+  picomcp read <file> [--json]
+  picomcp read <file> --tab <n> [--json]
 
 Writing cartridges:
-  picoMCP write <file> --code <lua> [--tab <n>] [--json]
+  picomcp write <file> --code <lua> [--tab <n>] [--json]
 
 Editing cartridges:
-  picoMCP edit <file> range --from <n> --to <n> --code <lua> [--json]
-  picoMCP edit <file> replace --find <text> --replace <text> [--json]
-  picoMCP edit <file> append --code <lua> [--json]
+  picomcp edit <file> range --from <n> --to <n> --code <lua> [--json]
+  picomcp edit <file> replace --find <text> --replace <text> [--json]
+  picomcp edit <file> append --code <lua> [--json]
 
 Analysis:
-  picoMCP parse <file> [--json]
-  picoMCP lint <file> [--json]
-  picoMCP size <file> [--json]
-  picoMCP minify <file> [--rename] [--json]
+  picomcp parse <file> [--json]
+  picomcp lint <file> [--json]
+  picomcp size <file> [--json]
+  picomcp minify <file> [--rename] [--json]
 
 Assets:
-  picoMCP sprite get <file> --index <n> [--json]    (n is 0-based, 0-255)
-  picoMCP sprite set <file> --index <n> --pixels <64-values> [--json]    (n is 0-based, 0-255)
-  picoMCP sprite get-range <file> --start <n> --end <n> [--json]    (0-based)
-  picoMCP sprite set-range <file> --sprites <json> [--json]
-  picoMCP sprite export <file> --output <path.png> [--json]
-  picoMCP sprite import <file> --input <path.png> [--json]
-  picoMCP map get <file> --x <n> --y <n> [--json]
-  picoMCP map set <file> --x <n> --y <n> --tile <n> [--json]
-  picoMCP map get-region <file> --x <n> --y <n> --width <n> --height <n> [--json]
-  picoMCP map set-region <file> --x <n> --y <n> --values <json> [--json]
-  picoMCP sfx get <file> --index <n> [--json]    (n is 0-based, 0-63)
-  picoMCP sfx set <file> --index <n> --data <json> [--json]    (n is 0-based, 0-63)
-  picoMCP sfx list <file> [--json]
-  picoMCP flags get <file> [--json]
-  picoMCP flags set <file> --sprite <n> --value <n> [--json]
-  picoMCP flags bulk <file> --pattern <values> [--json]
+  picomcp sprite get <file> --index <n> [--json]    (n is 0-based, 0-255)
+  picomcp sprite set <file> --index <n> --pixels <64-values> [--json]    (n is 0-based, 0-255)
+  picomcp sprite get-range <file> --start <n> --end <n> [--json]    (0-based)
+  picomcp sprite set-range <file> --sprites <json> [--json]
+  picomcp sprite export <file> --output <path.png> [--json]
+  picomcp sprite import <file> --input <path.png> [--json]
+  picomcp map get <file> --x <n> --y <n> [--json]
+  picomcp map set <file> --x <n> --y <n> --tile <n> [--json]
+  picomcp map get-region <file> --x <n> --y <n> --width <n> --height <n> [--json]
+  picomcp map set-region <file> --x <n> --y <n> --values <json> [--json]
+  picomcp sfx get <file> --index <n> [--json]    (n is 0-based, 0-63)
+  picomcp sfx set <file> --index <n> --data <json> [--json]    (n is 0-based, 0-63)
+  picomcp sfx list <file> [--json]
+  picomcp flags get <file> [--json]
+  picomcp flags set <file> --sprite <n> --value <n> [--json]
+  picomcp flags bulk <file> --pattern <values> [--json]
 
 Runtime:
-  picoMCP run <file> [--pico8 <path>] [--frames <n>] [--capture none|screen|gif] [--capture-at <n>] [--param <s>] [--json]
+  picomcp run <file> [--pico8 <path>] [--frames <n>] [--capture none|screen|gif] [--capture-at <n>] [--param <s>] [--json]
   Note: headless runs seed srand(1) for deterministic behavior. Re-seed in _init for variety.
-  picoMCP export <file> --to web|native [--pico8 <path>] [--output <path>] [--json]
+  picomcp export <file> --to web|native [--pico8 <path>] [--output <path>] [--json]
 
 Conversion:
-  picoMCP convert <file> --to p8.png|p8 [--output <path>] [--json]
+  picomcp convert <file> --to p8.png|p8 [--output <path>] [--json]
 
 Reference:
-  picoMCP ref api [--json]
-  picoMCP ref pitfalls [--json]
+  picomcp ref api [--json]
+  picomcp ref pitfalls [--json]
 
 MCP Server:
-  picoMCP serve
+  picomcp serve
 
 Tip: Use --option="value" form to pass values that start with hyphens or contain
      special characters, e.g. --code="-- comment\ncls()"

@@ -39,7 +39,7 @@ interface McpResponse {
   error?: { code: number; message: string };
 }
 
-describe("picoMCP MCP server smoke", () => {
+describe("picomcp MCP server smoke", () => {
   let child: ChildProcess;
 
   beforeEach(() => {
@@ -79,7 +79,7 @@ describe("picoMCP MCP server smoke", () => {
       jsonrpc: "2.0",
       id: 2,
       method: "tools/call",
-      params: { name: "picoMCP_read", arguments: { filePath: "nonexistent.p8" } },
+      params: { name: "picomcp_read", arguments: { filePath: "nonexistent.p8" } },
     })) as McpResponse;
     expect(result.error).toBeDefined();
     expect(result.error!.code).toBe(-32603);

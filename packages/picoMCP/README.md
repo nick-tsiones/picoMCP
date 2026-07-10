@@ -3,9 +3,9 @@
 Standalone CLI and MCP server for PICO-8 cartridge manipulation. Provides 31 top-level commands for reading, writing, editing, analyzing, running, and exporting PICO-8 cartridges — plus an MCP stdio server that exposes every command as an AI-callable tool.
 
 ```sh
-picoMCP --version   # picoMCP 0.1.0
-picoMCP --help      # full command listing
-picoMCP serve        # start MCP server (31 tools over JSON-RPC stdio)
+picomcp --version   # picoMCP 0.1.0
+picomcp --help      # full command listing
+picomcp serve        # start MCP server (31 tools over JSON-RPC stdio)
 ```
 
 ## Commands
@@ -14,79 +14,79 @@ picoMCP serve        # start MCP server (31 tools over JSON-RPC stdio)
 
 | Command                                  | Description                                     |
 | ---------------------------------------- | ----------------------------------------------- |
-| `picoMCP read <file> [--json]`           | Cartridge overview (code, tabs, tokens, assets) |
-| `picoMCP read <file> --tab <n> [--json]` | Read a single code tab                          |
+| `picomcp read <file> [--json]`           | Cartridge overview (code, tabs, tokens, assets) |
+| `picomcp read <file> --tab <n> [--json]` | Read a single code tab                          |
 
 ### Writing
 
 | Command                                                  | Description                               |
 | -------------------------------------------------------- | ----------------------------------------- |
-| `picoMCP write <file> --code=<lua> [--tab <n>] [--json]` | Write code to a new or existing cartridge |
+| `picomcp write <file> --code=<lua> [--tab <n>] [--json]` | Write code to a new or existing cartridge |
 
 ### Editing
 
 | Command                                                               | Description          |
 | --------------------------------------------------------------------- | -------------------- |
-| `picoMCP edit <file> range --from <n> --to <n> --code=<lua> [--json]` | Replace a line range |
-| `picoMCP edit <file> replace --find <text> --replace <text> [--json]` | Find and replace     |
-| `picoMCP edit <file> append --code=<lua> [--json]`                    | Append code          |
+| `picomcp edit <file> range --from <n> --to <n> --code=<lua> [--json]` | Replace a line range |
+| `picomcp edit <file> replace --find <text> --replace <text> [--json]` | Find and replace     |
+| `picomcp edit <file> append --code=<lua> [--json]`                    | Append code          |
 
 ### Analysis
 
 | Command                          | Description                                   |
 | -------------------------------- | --------------------------------------------- |
-| `picoMCP parse <file> [--json]`  | Lua syntax check with error locations         |
-| `picoMCP lint <file> [--json]`   | Lint for common PICO-8 code issues            |
-| `picoMCP size <file> [--json]`   | Token count, character count, compressed size |
-| `picoMCP minify <file> [--json]` | Minify code (safe or aggressive mode)         |
+| `picomcp parse <file> [--json]`  | Lua syntax check with error locations         |
+| `picomcp lint <file> [--json]`   | Lint for common PICO-8 code issues            |
+| `picomcp size <file> [--json]`   | Token count, character count, compressed size |
+| `picomcp minify <file> [--json]` | Minify code (safe or aggressive mode)         |
 
 ### Sprites
 
 | Command                                                          | Description                  |
 | ---------------------------------------------------------------- | ---------------------------- |
-| `picoMCP sprite get <file> --index <n> [--json]`                 | Read sprite as color grid    |
-| `picoMCP sprite set <file> --index <n> --grid <values> [--json]` | Write sprite from grid       |
-| `picoMCP sprite get-range <file> [--json]`                       | Read sprite range            |
-| `picoMCP sprite set-range <file> [--json]`                       | Write sprite range           |
-| `picoMCP sprite export <file> --output <path>`                   | Export sprite sheet as PNG   |
-| `picoMCP sprite import <file> --file <path> [--index <n>]`       | Import sprite sheet from PNG |
+| `picomcp sprite get <file> --index <n> [--json]`                 | Read sprite as color grid    |
+| `picomcp sprite set <file> --index <n> --grid <values> [--json]` | Write sprite from grid       |
+| `picomcp sprite get-range <file> [--json]`                       | Read sprite range            |
+| `picomcp sprite set-range <file> [--json]`                       | Write sprite range           |
+| `picomcp sprite export <file> --output <path>`                   | Export sprite sheet as PNG   |
+| `picomcp sprite import <file> --file <path> [--index <n>]`       | Import sprite sheet from PNG |
 
 ### Map
 
 | Command                                                                  | Description      |
 | ------------------------------------------------------------------------ | ---------------- |
-| `picoMCP map get <file> [--json]`                                        | Read full map    |
-| `picoMCP map set <file> --x <n> --y <n> --grid <values> [--json]`        | Paint map region |
-| `picoMCP map get-region <file> --x <n> --y <n> --w <n> --h <n> [--json]` | Read map region  |
-| `picoMCP map set-region <file> [--json]`                                 | Set map region   |
+| `picomcp map get <file> [--json]`                                        | Read full map    |
+| `picomcp map set <file> --x <n> --y <n> --grid <values> [--json]`        | Paint map region |
+| `picomcp map get-region <file> --x <n> --y <n> --w <n> --h <n> [--json]` | Read map region  |
+| `picomcp map set-region <file> [--json]`                                 | Set map region   |
 
 ### Sound
 
 | Command                                                     | Description                |
 | ----------------------------------------------------------- | -------------------------- |
-| `picoMCP sfx list <file> [--json]`                          | List all sound effects     |
-| `picoMCP sfx get <file> --index <n> [--json]`               | Read sound effect as notes |
-| `picoMCP sfx set <file> --index <n> --data <json> [--json]` | Write sound effect         |
+| `picomcp sfx list <file> [--json]`                          | List all sound effects     |
+| `picomcp sfx get <file> --index <n> [--json]`               | Read sound effect as notes |
+| `picomcp sfx set <file> --index <n> --data <json> [--json]` | Write sound effect         |
 
 ### Flags
 
 | Command                                                      | Description            |
 | ------------------------------------------------------------ | ---------------------- |
-| `picoMCP flags get <file> [--json]`                          | Read all sprite flags  |
-| `picoMCP flags set <file> --sprite <n> --value <n> [--json]` | Set single sprite flag |
-| `picoMCP flags bulk <file> --pattern <values> [--json]`      | Bulk set all 256 flags |
+| `picomcp flags get <file> [--json]`                          | Read all sprite flags  |
+| `picomcp flags set <file> --sprite <n> --value <n> [--json]` | Set single sprite flag |
+| `picomcp flags bulk <file> --pattern <values> [--json]`      | Bulk set all 256 flags |
 
 ### Runtime
 
 | Command                                                     | Description               |
 | ----------------------------------------------------------- | ------------------------- |
-| `picoMCP run <file> [--json]`                               | Run cartridge headlessly  |
-| `picoMCP run <file> --capture screen --frames <n> [--json]` | Run with screenshot       |
-| `picoMCP run <file> --capture gif --frames <n> [--json]`    | Run with animated capture |
-| `picoMCP run <file> --trace <vars> [--json]`                | Run with variable tracing |
-| `picoMCP run <file> --buttons <json> [--json]`              | Run with scripted inputs  |
-| `picoMCP export <file> --to web --output <path>`            | Export web build          |
-| `picoMCP export <file> --to native --output <path>`         | Export native binary      |
+| `picomcp run <file> [--json]`                               | Run cartridge headlessly  |
+| `picomcp run <file> --capture screen --frames <n> [--json]` | Run with screenshot       |
+| `picomcp run <file> --capture gif --frames <n> [--json]`    | Run with animated capture |
+| `picomcp run <file> --trace <vars> [--json]`                | Run with variable tracing |
+| `picomcp run <file> --buttons <json> [--json]`              | Run with scripted inputs  |
+| `picomcp export <file> --to web --output <path>`            | Export web build          |
+| `picomcp export <file> --to native --output <path>`         | Export native binary      |
 
 Note: Headless runs seed `srand(1)` for deterministic behavior. Re-seed in `_init()` for random variety. A timeout kill (exit code 124) does not mean the capture failed — a partial capture may still be valid.
 
@@ -94,21 +94,21 @@ Note: Headless runs seed `srand(1)` for deterministic behavior. Re-seed in `_ini
 
 | Command                              | Description                      |
 | ------------------------------------ | -------------------------------- |
-| `picoMCP convert <file> --to p8.png` | Convert .p8 to cartridge image   |
-| `picoMCP convert <file> --to p8`     | Extract .p8 from cartridge image |
+| `picomcp convert <file> --to p8.png` | Convert .p8 to cartridge image   |
+| `picomcp convert <file> --to p8`     | Extract .p8 from cartridge image |
 
 ### Reference
 
 | Command                         | Description                   |
 | ------------------------------- | ----------------------------- |
-| `picoMCP ref api [--json]`      | PICO-8 API function reference |
-| `picoMCP ref pitfalls [--json]` | Lua pitfalls guide            |
+| `picomcp ref api [--json]`      | PICO-8 API function reference |
+| `picomcp ref pitfalls [--json]` | Lua pitfalls guide            |
 
 ### MCP Server
 
 | Command         | Description                              |
 | --------------- | ---------------------------------------- |
-| `picoMCP serve` | Start MCP stdio server with all 31 tools |
+| `picomcp serve` | Start MCP stdio server with all 31 tools |
 
 ## MCP Integration
 

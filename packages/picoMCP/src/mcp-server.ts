@@ -104,7 +104,7 @@ function validateSchema(
 }
 
 function validateLimits(name: string, args: Record<string, unknown>): string | null {
-  if (name === "picoMCP_write") {
+  if (name === "picomcp_write") {
     if (typeof args.code === "string" && args.code.length > 65536) {
       return "code exceeds PICO-8 character limit (65536 chars)";
     }
@@ -112,7 +112,7 @@ function validateLimits(name: string, args: Record<string, unknown>): string | n
       return "tab must be 1-256";
     }
   }
-  if (name === "picoMCP_sprite_set") {
+  if (name === "picomcp_sprite_set") {
     if (typeof args.pixels === "string") {
       const pixelValues = args.pixels.split(",").map((s) => parseInt(s.trim(), 10));
       for (const v of pixelValues) {
@@ -122,7 +122,7 @@ function validateLimits(name: string, args: Record<string, unknown>): string | n
       }
     }
   }
-  if (name === "picoMCP_run") {
+  if (name === "picomcp_run") {
     if (typeof args.frames === "number" && (args.frames < 1 || args.frames > 36000)) {
       return "frames must be 1-36000";
     }
@@ -141,34 +141,34 @@ async function callTool(
   const filePath = args.filePath as string | undefined;
 
   switch (name) {
-    case "picoMCP_read": {
+    case "picomcp_read": {
       const fp = requireStr(filePath, "filePath");
       return readOverview(root, fp);
     }
-    case "picoMCP_read_tab": {
+    case "picomcp_read_tab": {
       const fp = requireStr(filePath, "filePath");
       const tab = requireNum(args.tab, "tab");
       return readTab(root, fp, tab);
     }
-    case "picoMCP_write": {
+    case "picomcp_write": {
       const fp = requireStr(filePath, "filePath");
       const code = requireStr(args.code as string | undefined, "code");
       const tab = args.tab !== undefined ? requireNum(args.tab, "tab") : 1;
       return writeCartridge(root, fp, code, tab);
     }
-    case "picoMCP_parse": {
+    case "picomcp_parse": {
       const fp = requireStr(filePath, "filePath");
       return parseCartridge(root, fp);
     }
-    case "picoMCP_lint": {
+    case "picomcp_lint": {
       const fp = requireStr(filePath, "filePath");
       return lintCartridge(root, fp);
     }
-    case "picoMCP_size": {
+    case "picomcp_size": {
       const fp = requireStr(filePath, "filePath");
       return sizeCartridge(root, fp);
     }
-    case "picoMCP_run": {
+    case "picomcp_run": {
       const fp = requireStr(filePath, "filePath");
       let input: RunInputFrame[] | undefined;
       if (args.input !== undefined) {
@@ -205,7 +205,7 @@ async function callTool(
         input,
       });
     }
-    case "picoMCP_export": {
+    case "picomcp_export": {
       const fp = requireStr(filePath, "filePath");
       const to = requireStr(args.to as string | undefined, "to");
       if (to !== "web" && to !== "native") throw new Error('--to must be "web" or "native"');
@@ -215,28 +215,28 @@ async function callTool(
         outputPath: args.output as string | undefined,
       });
     }
-    case "picoMCP_convert": {
+    case "picomcp_convert": {
       const fp = requireStr(filePath, "filePath");
       const to = requireStr(args.to as string | undefined, "to");
       if (to !== "p8.png" && to !== "p8") throw new Error('--to must be "p8.png" or "p8"');
       return convertCartridge(root, fp, to, args.output as string | undefined);
     }
-    case "picoMCP_flags_get": {
+    case "picomcp_flags_get": {
       const fp = requireStr(filePath, "filePath");
       return getFlagsCmd(root, fp);
     }
-    case "picoMCP_flags_set": {
+    case "picomcp_flags_set": {
       const fp = requireStr(filePath, "filePath");
       const sprite = requireNum(args.sprite, "sprite");
       const value = requireNum(args.value, "value");
       return setFlagCmd(root, fp, sprite - 1, value);
     }
-    case "picoMCP_sprite_get": {
+    case "picomcp_sprite_get": {
       const fp = requireStr(filePath, "filePath");
       const index = requireNum(args.index, "index") - 1;
       return getSpriteCmd(root, fp, index);
     }
-    case "picoMCP_sprite_set": {
+    case "picomcp_sprite_set": {
       const fp = requireStr(filePath, "filePath");
       const index = requireNum(args.index, "index") - 1;
       const pixelsStr = requireStr(args.pixels as string | undefined, "pixels");
@@ -250,13 +250,13 @@ async function callTool(
       if (pixels.length !== 64) throw new Error("pixels must contain exactly 64 values (8x8)");
       return setSpriteCmd(root, fp, index, pixels);
     }
-    case "picoMCP_map_get": {
+    case "picomcp_map_get": {
       const fp = requireStr(filePath, "filePath");
       const x = requireNum(args.x, "x") - 1;
       const y = requireNum(args.y, "y") - 1;
       return getMapCellCmd(root, fp, x, y);
     }
-    case "picoMCP_map_set": {
+    case "picomcp_map_set": {
       const fp = requireStr(filePath, "filePath");
       const x = requireNum(args.x, "x") - 1;
       const y = requireNum(args.y, "y") - 1;
@@ -264,12 +264,12 @@ async function callTool(
       if (tile > 256) throw new Error("tile must be 1-256");
       return setMapCellCmd(root, fp, x, y, tile - 1);
     }
-    case "picoMCP_sfx_get": {
+    case "picomcp_sfx_get": {
       const fp = requireStr(filePath, "filePath");
       const index = requireNum(args.index, "index") - 1;
       return getSfxCmd(root, fp, index);
     }
-    case "picoMCP_sfx_set": {
+    case "picomcp_sfx_set": {
       const fp = requireStr(filePath, "filePath");
       const index = requireNum(args.index, "index") - 1;
       const dataStr = requireStr(args.data as string | undefined, "data");
@@ -286,30 +286,30 @@ async function callTool(
       }
       return setSfxCmd(root, fp, index, data);
     }
-    case "picoMCP_minify": {
+    case "picomcp_minify": {
       const fp = requireStr(filePath, "filePath");
       const rename = Boolean(args.rename);
       return minifyCartridge(root, fp, rename);
     }
-    case "picoMCP_edit_range": {
+    case "picomcp_edit_range": {
       const fp = requireStr(filePath, "filePath");
       const from = requireNum(args.from, "from");
       const to = requireNum(args.to, "to");
       const code = requireStr(args.code as string | undefined, "code");
       return editRangeCmd(root, fp, from, to, code);
     }
-    case "picoMCP_edit_replace": {
+    case "picomcp_edit_replace": {
       const fp = requireStr(filePath, "filePath");
       const find = requireStr(args.find as string | undefined, "find");
       const replace = requireStr(args.replace as string | undefined, "replace");
       return editReplaceCmd(root, fp, find, replace);
     }
-    case "picoMCP_edit_append": {
+    case "picomcp_edit_append": {
       const fp = requireStr(filePath, "filePath");
       const code = requireStr(args.code as string | undefined, "code");
       return editAppendCmd(root, fp, code);
     }
-    case "picoMCP_flags_bulk": {
+    case "picomcp_flags_bulk": {
       const fp = requireStr(filePath, "filePath");
       const patternStr = requireStr(args.pattern as string | undefined, "pattern");
       const values = patternStr.split(",").map((s) => {
@@ -319,13 +319,13 @@ async function callTool(
       });
       return bulkSetFlagsCmd(root, fp, values);
     }
-    case "picoMCP_sprite_get_range": {
+    case "picomcp_sprite_get_range": {
       const fp = requireStr(filePath, "filePath");
       const start = requireNum(args.start, "start") - 1;
       const end = requireNum(args.end, "end") - 1;
       return getSpriteRangeCmd(root, fp, start, end);
     }
-    case "picoMCP_sprite_set_range": {
+    case "picomcp_sprite_set_range": {
       const fp = requireStr(filePath, "filePath");
       const spritesStr = requireStr(args.sprites as string | undefined, "sprites");
       let entries: { index: number; pixels: number[] }[];
@@ -346,17 +346,17 @@ async function callTool(
       }
       return setSpriteRangeCmd(root, fp, entries);
     }
-    case "picoMCP_sprite_export": {
+    case "picomcp_sprite_export": {
       const fp = requireStr(filePath, "filePath");
       const output = requireStr(args.output as string | undefined, "output");
       return spriteExportCmd(root, fp, output);
     }
-    case "picoMCP_sprite_import": {
+    case "picomcp_sprite_import": {
       const fp = requireStr(filePath, "filePath");
       const input = requireStr(args.input as string | undefined, "input");
       return spriteImportCmd(root, fp, input);
     }
-    case "picoMCP_map_get_region": {
+    case "picomcp_map_get_region": {
       const fp = requireStr(filePath, "filePath");
       const x = requireNum(args.x, "x") - 1;
       const y = requireNum(args.y, "y") - 1;
@@ -364,7 +364,7 @@ async function callTool(
       const h = requireNum(args.height, "height");
       return getMapRegionCmd(root, fp, x, y, w, h);
     }
-    case "picoMCP_map_set_region": {
+    case "picomcp_map_set_region": {
       const fp = requireStr(filePath, "filePath");
       const x = requireNum(args.x, "x") - 1;
       const y = requireNum(args.y, "y") - 1;
@@ -377,13 +377,13 @@ async function callTool(
       }
       return setMapRegionCmd(root, fp, x, y, values);
     }
-    case "picoMCP_sfx_list": {
+    case "picomcp_sfx_list": {
       const fp = requireStr(filePath, "filePath");
       return listSfxCmd(root, fp);
     }
-    case "picoMCP_ref_api":
+    case "picomcp_ref_api":
       return refApi();
-    case "picoMCP_ref_pitfalls":
+    case "picomcp_ref_pitfalls":
       return refPitfalls();
     default:
       throw new Error(`Unknown tool: ${name}`);
