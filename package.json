@@ -1,5 +1,5 @@
 {
-  "name": "qdcli-workspace",
+  "name": "picomcp-monorepo",
   "version": "0.1.5",
   "private": true,
   "type": "module",

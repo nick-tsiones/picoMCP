@@ -1,6 +1,6 @@
 # Changelog
 
-All notable qdcli changes are recorded here.
+All notable changes to the picoMCP project are recorded here. The qdcli DAG ledger is the development tool used to build picoMCP.
 
 ## v0.1.5 - 2026-06-26
 
