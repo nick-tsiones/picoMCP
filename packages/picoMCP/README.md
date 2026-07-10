@@ -128,6 +128,20 @@ Example MCP tools/call for reading a cartridge:
 }
 ```
 
+## Security
+
+### Trust model
+
+picoMCP's MCP server executes with the same filesystem permissions as the invoking user.
+All cartridge paths are validated against the project root boundary. Headless PICO-8
+execution runs in an isolated temporary directory.
+
+- **Filesystem**: Only paths within the project directory are readable/writable
+- **Execution**: PICO-8 runs in a sandboxed temp directory, deleted after each run
+- **Network**: No network access provided through picoMCP
+
+Only expose `picomcp serve` to trusted agents and environments.
+
 ## Dependencies
 
 - Node.js ≥ 24

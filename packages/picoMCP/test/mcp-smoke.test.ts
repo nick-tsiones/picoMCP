@@ -35,8 +35,8 @@ interface McpResponse {
   result?: {
     tools?: unknown[];
     content?: Array<{ type: string; text: string }>;
-    isError?: boolean;
   };
+  error?: { code: number; message: string };
 }
 
 describe("picoMCP MCP server smoke", () => {
@@ -81,7 +81,7 @@ describe("picoMCP MCP server smoke", () => {
       method: "tools/call",
       params: { name: "picoMCP_read", arguments: { filePath: "nonexistent.p8" } },
     })) as McpResponse;
-    expect(result.result?.content).toBeInstanceOf(Array);
-    expect(result.result!.content!.length).toBeGreaterThan(0);
+    expect(result.error).toBeDefined();
+    expect(result.error!.code).toBe(-32603);
   });
 });

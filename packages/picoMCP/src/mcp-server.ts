@@ -1,5 +1,5 @@
 import { createInterface } from "node:readline";
-import { MCP_TOOLS } from "./mcp-tools.js";
+import { MCP_TOOLS, type McpTool } from "./mcp-tools.js";
 import {
   bulkSetFlagsCmd,
   convertCartridge,
@@ -33,7 +33,7 @@ import {
   spriteImportCmd,
   writeCartridge,
 } from "./commands.js";
-import { resolveProjectRoot, type RunInputFrame } from "@picomcp/core";
+import { resolveProjectRoot, ProjectBoundaryError, type RunInputFrame } from "@picomcp/core";
 
 interface JsonRpcRequest {
   jsonrpc: "2.0";
@@ -69,6 +69,68 @@ function errorReply(
 
 function send(response: JsonRpcResponse): void {
   process.stdout.write(JSON.stringify(response) + "\n");
+}
+
+function findTool(name: string): McpTool | undefined {
+  return MCP_TOOLS.find((t) => t.name === name);
+}
+
+function validateSchema(
+  args: Record<string, unknown>,
+  schema: McpTool["inputSchema"],
+): string | null {
+  if (schema.required) {
+    for (const key of schema.required) {
+      if (args[key] === undefined || args[key] === null) {
+        return `Missing required field: ${key}`;
+      }
+    }
+  }
+  for (const [key, value] of Object.entries(args)) {
+    const prop = schema.properties[key] as { type?: string } | undefined;
+    if (prop && prop.type && value !== undefined && value !== null) {
+      if (prop.type === "string" && typeof value !== "string") {
+        return `Field "${key}" must be a string, got ${typeof value}`;
+      }
+      if (prop.type === "number" && typeof value !== "number") {
+        return `Field "${key}" must be a number, got ${typeof value}`;
+      }
+      if (prop.type === "boolean" && typeof value !== "boolean") {
+        return `Field "${key}" must be a boolean, got ${typeof value}`;
+      }
+    }
+  }
+  return null;
+}
+
+function validateLimits(name: string, args: Record<string, unknown>): string | null {
+  if (name === "picoMCP_write") {
+    if (typeof args.code === "string" && args.code.length > 65536) {
+      return "code exceeds PICO-8 character limit (65536 chars)";
+    }
+    if (typeof args.tab === "number" && (args.tab < 1 || args.tab > 256)) {
+      return "tab must be 1-256";
+    }
+  }
+  if (name === "picoMCP_sprite_set") {
+    if (typeof args.pixels === "string") {
+      const pixelValues = args.pixels.split(",").map((s) => parseInt(s.trim(), 10));
+      for (const v of pixelValues) {
+        if (!Number.isInteger(v) || v < 0 || v > 15) {
+          return `Pixel value "${v}" must be 0-15`;
+        }
+      }
+    }
+  }
+  if (name === "picoMCP_run") {
+    if (typeof args.frames === "number" && (args.frames < 1 || args.frames > 36000)) {
+      return "frames must be 1-36000";
+    }
+    if (typeof args.timeoutMs === "number" && args.timeoutMs > 300000) {
+      return "timeoutMs must not exceed 300000 (5 minutes)";
+    }
+  }
+  return null;
 }
 
 async function callTool(
@@ -157,7 +219,7 @@ async function callTool(
       const fp = requireStr(filePath, "filePath");
       const to = requireStr(args.to as string | undefined, "to");
       if (to !== "p8.png" && to !== "p8") throw new Error('--to must be "p8.png" or "p8"');
-      return convertCartridge(fp, to, args.output as string | undefined);
+      return convertCartridge(root, fp, to, args.output as string | undefined);
     }
     case "picoMCP_flags_get": {
       const fp = requireStr(filePath, "filePath");
@@ -395,6 +457,24 @@ export async function startMcpServer(): Promise<void> {
             break;
           }
 
+          const tool = findTool(toolName);
+          if (!tool) {
+            send(errorReply(request.id, -32601, `Unknown tool: ${toolName}`));
+            break;
+          }
+
+          const schemaError = validateSchema(toolArgs, tool.inputSchema);
+          if (schemaError) {
+            send(errorReply(request.id, -32602, schemaError));
+            break;
+          }
+
+          const limitError = validateLimits(toolName, toolArgs);
+          if (limitError) {
+            send(errorReply(request.id, -32602, limitError));
+            break;
+          }
+
           try {
             if (!root) {
               root = await resolveProjectRoot({ allowMissing: true });
@@ -406,13 +486,12 @@ export async function startMcpServer(): Promise<void> {
               }),
             );
           } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : String(error);
-            send(
-              reply(request.id, {
-                content: [{ type: "text", text: JSON.stringify({ error: message }, null, 2) }],
-                isError: true,
-              }),
-            );
+            if (error instanceof ProjectBoundaryError) {
+              send(errorReply(request.id, -32602, error.message));
+            } else {
+              const message = error instanceof Error ? error.message : String(error);
+              send(errorReply(request.id, -32603, message));
+            }
           }
           break;
         }

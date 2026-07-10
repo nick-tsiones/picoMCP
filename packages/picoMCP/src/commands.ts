@@ -1,4 +1,5 @@
 import {
+  assertWithinProjectBoundary,
   CartRepo,
   exportCart,
   exportSpriteSheet,
@@ -178,14 +179,17 @@ export async function exportCartridge(
 }
 
 export async function convertCartridge(
+  root: string,
   filePath: string,
   toFormat: string,
   outputPath?: string,
 ): Promise<ConvertResult> {
+  await assertWithinProjectBoundary(root, filePath);
   if (toFormat === "p8.png") {
     const p8Data = await readFile(filePath);
     const pngData = createMinimalPng(p8Data);
     const dest = outputPath || filePath.replace(/\.p8$/i, ".p8.png");
+    await assertWithinProjectBoundary(root, dest);
     await writeFile(dest, pngData);
     return { success: true, outputPath: dest };
   }
@@ -195,6 +199,7 @@ export async function convertCartridge(
     throw new Error("No .p8 data found in the .p8.png file");
   }
   const dest = outputPath || filePath.replace(/\.p8\.png$/i, ".p8");
+  await assertWithinProjectBoundary(root, dest);
   await writeFile(dest, p8Data);
   return { success: true, outputPath: dest };
 }
@@ -204,6 +209,7 @@ export async function spriteExportCmd(
   filePath: string,
   outputPath: string,
 ): Promise<{ ok: boolean; outputPath: string; message: string }> {
+  await assertWithinProjectBoundary(root, outputPath);
   const cart = await repo.load(root, filePath);
   const pngData = exportSpriteSheet(cart.gfx);
   await writeFile(outputPath, pngData);
@@ -215,6 +221,7 @@ export async function spriteImportCmd(
   filePath: string,
   inputPath: string,
 ): Promise<{ ok: boolean; message: string }> {
+  await assertWithinProjectBoundary(root, inputPath);
   const pngData = await readFile(inputPath);
   const cart = await repo.load(root, filePath);
   const result = importSpriteSheet(cart.gfx, pngData);

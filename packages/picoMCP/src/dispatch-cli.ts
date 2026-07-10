@@ -383,7 +383,7 @@ async function handleConvert(
     throw new Error('--to must be "p8.png" or "p8"');
   }
   try {
-    const result = await convertCartridge(filePath, toFormat, stringOpt(options.output));
+    const result = await convertCartridge(root, filePath, toFormat, stringOpt(options.output));
     output(result, json);
   } catch (error: unknown) {
     if (error instanceof Error) {
