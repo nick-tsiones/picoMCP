@@ -371,7 +371,7 @@ export function lintCart(cart: Cart): LintReport {
           !LUA_KEYWORDS.has(varName) &&
           !/\.\s*$/.test(before) &&
           !/\[\s*$/.test(before) &&
-          functionDepth > 0
+          functionDepth === 0
         ) {
           issues.push({
             line: lineNum,
