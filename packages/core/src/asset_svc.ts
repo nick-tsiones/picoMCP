@@ -225,61 +225,62 @@ export interface Sfx {
   loopEnd: number; // 0-31
 }
 
-function parseSfxLine(line: string): Sfx {
-  const bytes: number[] = [];
-  for (let i = 0; i < line.length; i += 2) {
-    bytes.push(parseInt(line.slice(i, i + 2), 16));
+export function parseSfxLine(line: string): Sfx {
+  if (line.length < 8) {
+    return { notes: [], speed: 0, loopStart: 0, loopEnd: 0 };
   }
 
-  const _editorMode = bytes[0] ?? 0;
-  const speed = bytes[1] ?? 0;
-  const loopStart = bytes[2] ?? 0;
-  const loopEnd = bytes[3] ?? 0;
+  const _editorMode = parseInt(line.slice(0, 2), 16);
+  const speed = parseInt(line.slice(2, 4), 16);
+  const loopStart = parseInt(line.slice(4, 6), 16);
+  const loopEnd = parseInt(line.slice(6, 8), 16);
 
   const notes: SfxNote[] = [];
-  for (let i = 4; i + 1 < bytes.length; i += 2) {
-    const byte0 = bytes[i]!;
-    const byte1 = bytes[i + 1]!;
-    const pitch = (byte0 >> 2) & 0x3f;
-    const instr = byte0 & 0x03;
-    const vol = (byte1 >> 5) & 0x07;
-    const fx = (byte1 >> 2) & 0x07;
+  for (let i = 0; i < 32; i++) {
+    const offset = 8 + i * 5;
+    if (offset + 5 > line.length) break;
+    const pitch = parseInt(line.slice(offset, offset + 2), 16);
+    const instr = parseInt(line[offset + 2]!, 16);
+    const vol = parseInt(line[offset + 3]!, 16);
+    const fx = parseInt(line[offset + 4]!, 16);
     notes.push({ pitch, instr, vol, fx });
-    if (notes.length >= 32) break;
   }
 
   return { notes, speed, loopStart, loopEnd };
 }
 
-function serializeSfxLine(sfx: Sfx): string {
-  const bytes: number[] = [];
-  bytes.push(0);
-  bytes.push(sfx.speed & 0xff);
-  bytes.push(sfx.loopStart & 0x3f);
-  bytes.push(sfx.loopEnd & 0x3f);
-  for (const note of sfx.notes) {
-    const byte0 = ((note.pitch & 0x3f) << 2) | (note.instr & 0x03);
-    const byte1 = ((note.vol & 0x07) << 5) | ((note.fx & 0x07) << 2);
-    bytes.push(byte0, byte1);
+export function serializeSfxLine(sfx: Sfx): string {
+  let line = "";
+  line += "00";
+  line += (sfx.speed & 0xff).toString(16).padStart(2, "0");
+  line += (sfx.loopStart & 0xff).toString(16).padStart(2, "0");
+  line += (sfx.loopEnd & 0xff).toString(16).padStart(2, "0");
+  for (let i = 0; i < 32; i++) {
+    const note = sfx.notes[i];
+    if (note) {
+      line += (note.pitch & 0x3f).toString(16).padStart(2, "0");
+      line += (note.instr & 0x0f).toString(16)[0]!;
+      line += (note.vol & 0x07).toString(16)[0]!;
+      line += (note.fx & 0x07).toString(16)[0]!;
+    } else {
+      line += "00000";
+    }
   }
-  return bytes.map((b) => b.toString(16).padStart(2, "0")).join("");
+  return line;
 }
 
 export function getSfx(sfx: unknown[], n: number): Sfx {
   if (n < 0 || n > 63) throw new Error("SFX index must be 0-63");
   const raw = sfx[n];
-  if (raw == null || raw === "" || raw === "00000000") {
+  if (raw == null || raw === "" || typeof raw !== "string" || raw.length < 8) {
     return { notes: [], speed: 0, loopStart: 0, loopEnd: 0 };
   }
-  if (typeof raw === "string") return parseSfxLine(raw);
-  return { notes: [], speed: 0, loopStart: 0, loopEnd: 0 };
+  return parseSfxLine(raw);
 }
 
 export function setSfx(sfx: unknown[], n: number, entry: Sfx): void {
   if (n < 0 || n > 63) throw new Error("SFX index must be 0-63");
-  // Pad with a minimal non-empty SFX line so empty entries survive
-  // the .filter(Boolean) in parseP8.
-  const EMPTY_SFX_LINE = "00000000";
+  const EMPTY_SFX_LINE = "0".repeat(168);
   while (sfx.length <= n) sfx.push(EMPTY_SFX_LINE);
   sfx[n] = serializeSfxLine(entry);
 }
@@ -288,7 +289,10 @@ export function listSfx(sfx: unknown[]): { index: number; noteCount: number }[] 
   const result: { index: number; noteCount: number }[] = [];
   for (let i = 0; i < 64; i++) {
     const entry = getSfx(sfx, i);
-    result.push({ index: i, noteCount: entry.notes.length });
+    const noteCount = entry.notes.filter(
+      (n) => n.pitch !== 0 || n.instr !== 0 || n.vol !== 0 || n.fx !== 0,
+    ).length;
+    result.push({ index: i, noteCount });
   }
   return result;
 }
