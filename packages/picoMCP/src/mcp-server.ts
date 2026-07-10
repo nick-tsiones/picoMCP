@@ -33,7 +33,7 @@ import {
   spriteImportCmd,
   writeCartridge,
 } from "./commands.js";
-import { resolveProjectRoot } from "@cat-cave/qdcli-core";
+import { resolveProjectRoot, type RunInputFrame } from "@cat-cave/qdcli-core";
 
 interface JsonRpcRequest {
   jsonrpc: "2.0";
@@ -108,12 +108,39 @@ async function callTool(
     }
     case "picoMCP_run": {
       const fp = requireStr(filePath, "filePath");
+      let input: RunInputFrame[] | undefined;
+      if (args.input !== undefined) {
+        const inputStr = args.input as string;
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(inputStr);
+        } catch {
+          throw new Error("input must be a valid JSON array");
+        }
+        if (!Array.isArray(parsed)) {
+          throw new Error("input must be a JSON array of {frame, hold} entries");
+        }
+        for (const entry of parsed) {
+          if (
+            typeof entry !== "object" ||
+            entry === null ||
+            typeof (entry as Record<string, unknown>).frame !== "number" ||
+            !Array.isArray((entry as Record<string, unknown>).hold)
+          ) {
+            throw new Error(
+              'Each input entry must have "frame" (number) and "hold" (array of numbers)',
+            );
+          }
+        }
+        input = parsed as RunInputFrame[];
+      }
       return runCartridge(root, fp, {
         binaryPath: args.pico8 as string | undefined,
         frames: args.frames as number | undefined,
         capture: (args.capture as "none" | "screen" | "gif" | undefined) ?? "none",
         captureAt: args.captureAt as number | undefined,
         param: args.param as string | undefined,
+        input,
       });
     }
     case "picoMCP_export": {

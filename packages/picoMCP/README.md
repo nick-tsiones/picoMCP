@@ -76,8 +76,14 @@ picoMCP serve        # start MCP server (31 tools over JSON-RPC stdio)
 | `picoMCP run <file> --capture screen --frames <n> [--json]` | Run with screenshot |
 | `picoMCP run <file> --capture gif --frames <n> [--json]` | Run with animated capture |
 | `picoMCP run <file> --trace <vars> [--json]` | Run with variable tracing |
-| `picoMCP run <file> --buttons <json> [--json]` | Run with scripted inputs |
-| `picoMCP run <file> --timeout 60000 [--json]` | Run with custom 60s timeout |
+| `picoMCP run <file> --input <json|@file.json> [--json]` | Run with scripted button injection |
+
+Example with scripted inputs:
+```sh
+picoMCP run mygame.p8 --input '[{"frame":30,"hold":[4]},{"frame":60,"hold":[5]}]'
+picoMCP run mygame.p8 --input @inputs.json
+```
+Where `inputs.json` contains an array of `{frame, hold}` entries with PICO-8 button numbers (0=left, 1=right, 2=up, 3=down, 4=X, 5=O).
 | `picoMCP export <file> --to web --output <path>` | Export web build |
 | `picoMCP export <file> --to native --output <path>` | Export native binary |
 
