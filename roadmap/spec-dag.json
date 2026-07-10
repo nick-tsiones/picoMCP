@@ -44,6 +44,11 @@
         "name": "validation",
         "rank": 8,
         "created_at": "1970-01-01T00:00:00.000Z"
+      },
+      {
+        "name": "realignment",
+        "rank": 9,
+        "created_at": "1970-01-01T00:00:00.000Z"
       }
     ]
   },
@@ -1278,6 +1283,88 @@
         "Coverage must not be achieved by deleting, weakening, or narrowing a scenario; all listed behaviors are exercised as written.",
         "Every acceptance clause has real-surface evidence in the completion report."
       ]
+    },
+    {
+      "id": "standalone-picomcp-cli-and-mcp-server",
+      "title": "Realign picoMCP as a standalone CLI + MCP server (decouple from qdcli identity)",
+      "kind": "feature",
+      "milestone": "realignment",
+      "status": "ready",
+      "priority": "P0",
+      "estimate_points": 13,
+      "risk": "high",
+      "owner": null,
+      "branch": null,
+      "spec": "## Objective\nTransform picoMCP from a qdcli subcommand into a standalone program with its own identity: an executable invoked as `picoMCP`, and an MCP (Model Context Protocol) server that exposes cartridge operations as tools AI agents can call.\n\nCurrently all cartridge tooling is embedded inside the qdcli monorepo — the CLI binary is `qd`, cartridge commands live under `qd cart <action>`, and there is no MCP server surface despite the project being named picoMCP. This node fixes that.\n\n## Non-goals\nRewriting the core cartridge primitives (cart_repo, static_svc, asset_svc, runtime_svc). Those are correct and stay in `packages/core/`. Removing qdcli entirely — qdcli remains as the DAG development tool but becomes a peer, not the container.\n\n## Behaviors this node must prove\n- standalone-picomcp/exists-as-a-standalone-picomcp-binary-not-qd-cart\n- standalone-picomcp/cartridge-read-write-parse-lint-size-commands-are-top-level-picomcp-commands\n- standalone-picomcp/sprite-map-sfx-commands-are-top-level-picomcp-commands\n- standalone-picomcp/cart-run-and-cart-export-are-top-level-picomcp-commands\n- standalone-picomcp/mcp-server-starts-and-advertises-tools-via-mcp-protocol\n- standalone-picomcp/mcp-read-tool-returns-cartridge-overview-and-code\n- standalone-picomcp/mcp-write-tool-creates-or-updates-cartridge-code\n- standalone-picomcp/mcp-run-tool-executes-a-cartridge-headlessly-and-returns-output\n- standalone-picomcp/mcp-tools-match-the-cli-commands-one-to-one\n- standalone-picomcp/help-and-version-output-show-picomcp-identity-not-qdcli\n- standalone-picomcp/root-readme-and-package-metadata-reflect-picomcp-identity\n\n## Tasks\n- [ ] Create a new `packages/picoMCP` package with its own package.json, binary entry point named `picoMCP` (or `picomcp`)\n- [ ] Port all cartridge CLI commands (read, write, edit, parse, lint, size, sprite, map, sfx, run, export, convert, flags, ref) from `qd cart <action>` to top-level `picoMCP <action>`\n- [ ] Implement an MCP server (stdio transport, per the Model Context Protocol spec) that advertises each cartridge operation as a tool\n- [ ] Each MCP tool maps to the corresponding CLI command and accepts the same parameters\n- [ ] The `picoMCP` binary supports a `serve` command to start the MCP server\n- [ ] Add a shebang or bin entry so `picoMCP` is invocable directly after install\n- [ ] Update root README.md to describe picoMCP as the project, with install/usage examples for both CLI and MCP modes\n- [ ] Update root package.json name/description/version to reflect picoMCP identity\n- [ ] Ensure qdcli (`qd`) still works independently for DAG management — it imports from `packages/core/` just like picoMCP does\n- [ ] Terminal: invoke `picoMCP --help`, `picoMCP read`, `picoMCP run`, `picoMCP serve --help` and capture output as evidence\n- [ ] Terminal: start the MCP server and send a tools/list request to verify tool advertisement\n\n## Real-world dependencies\nDepends on all 23 existing DAG nodes (all cartridge primitives must work). Core library (`packages/core/`) is the shared dependency for both qdcli and picoMCP.\n\n## Rollback\nRevert the new package and restore the qd cart subcommand routing.",
+      "acceptance": "picoMCP is invoked as its own binary not as a qd subcommand cartridge read write parse lint size sprite map sfx run and export are all top-level picoMCP commands the MCP server starts via picoMCP serve advertises each cartridge operation as an MCP tool the read tool returns cartridge overview and code the write tool creates or updates cartridge code the run tool executes a cartridge headlessly and returns output every CLI command has a corresponding MCP tool help and version output show picoMCP identity the root README describes picoMCP as a standalone program with both CLI and MCP usage",
+      "validation": null,
+      "context": null,
+      "created_at": "2026-07-10T18:41:19.031Z",
+      "updated_at": "2026-07-10T18:41:32.648Z",
+      "claimed_at": null,
+      "done_at": null,
+      "group_name": null,
+      "status_reason": null,
+      "check_command": null,
+      "ci_command": null,
+      "blocked_by": null,
+      "blocked_reason": null,
+      "blocked_owner": null,
+      "projects": [],
+      "verification": [
+        {
+          "type": "command",
+          "value": "<prove standalone-picomcp/exists-as-a-standalone-picomcp-binary-not-qd-cart via real binary invocation>"
+        },
+        {
+          "type": "command",
+          "value": "<prove standalone-picomcp/cartridge-read-write-parse-lint-size-commands-are-top-level-picomcp-commands via real CLI>"
+        },
+        {
+          "type": "command",
+          "value": "<prove standalone-picomcp/sprite-map-sfx-commands-are-top-level-picomcp-commands via real CLI>"
+        },
+        {
+          "type": "command",
+          "value": "<prove standalone-picomcp/cart-run-and-cart-export-are-top-level-picomcp-commands via real CLI>"
+        },
+        {
+          "type": "command",
+          "value": "<prove standalone-picomcp/mcp-server-starts-and-advertises-tools-via-mcp-protocol via real MCP stdio>"
+        },
+        {
+          "type": "command",
+          "value": "<prove standalone-picomcp/mcp-read-tool-returns-cartridge-overview-and-code via MCP tools/call>"
+        },
+        {
+          "type": "command",
+          "value": "<prove standalone-picomcp/mcp-write-tool-creates-or-updates-cartridge-code via MCP tools/call>"
+        },
+        {
+          "type": "command",
+          "value": "<prove standalone-picomcp/mcp-run-tool-executes-a-cartridge-headlessly-and-returns-output via MCP tools/call>"
+        },
+        {
+          "type": "command",
+          "value": "<prove standalone-picomcp/mcp-tools-match-the-cli-commands-one-to-one via tools/list>"
+        },
+        {
+          "type": "command",
+          "value": "<prove standalone-picomcp/help-and-version-output-show-picomcp-identity-not-qdcli via --help and --version>"
+        },
+        {
+          "type": "command",
+          "value": "<prove standalone-picomcp/root-readme-and-package-metadata-reflect-picomcp-identity via file inspection>"
+        }
+      ],
+      "audit_focus": [
+        "The picoMCP binary must be independently invocable — not a thin wrapper around qd.",
+        "Every CLI command must have a corresponding MCP tool with the same parameters and semantics.",
+        "Reject implementations that only work via qd cart <action> aliases.",
+        "The MCP server must use the standard MCP stdio transport (JSON-RPC over stdin/stdout).",
+        "Negation check: invoking the old qd cart commands should NOT be how picoMCP works.",
+        "Every acceptance clause has real-surface evidence: actual binary output, actual MCP JSON-RPC responses."
+      ]
     }
   ],
   "edges": [
@@ -1808,6 +1895,90 @@
       "to_node": "menu-driven-game-collection",
       "type": "requires",
       "created_at": "2026-07-10T17:42:07.181Z"
+    },
+    {
+      "from_node": "bootstrap-repo-git-gh",
+      "to_node": "standalone-picomcp-cli-and-mcp-server",
+      "type": "requires",
+      "created_at": "2026-07-10T18:41:25.069Z"
+    },
+    {
+      "from_node": "bootstrap-qd-config",
+      "to_node": "standalone-picomcp-cli-and-mcp-server",
+      "type": "requires",
+      "created_at": "2026-07-10T18:41:25.140Z"
+    },
+    {
+      "from_node": "bootstrap-runtime-environment",
+      "to_node": "standalone-picomcp-cli-and-mcp-server",
+      "type": "requires",
+      "created_at": "2026-07-10T18:41:25.197Z"
+    },
+    {
+      "from_node": "environment-and-capability-detection",
+      "to_node": "standalone-picomcp-cli-and-mcp-server",
+      "type": "requires",
+      "created_at": "2026-07-10T18:41:25.253Z"
+    },
+    {
+      "from_node": "reading-cartridges",
+      "to_node": "standalone-picomcp-cli-and-mcp-server",
+      "type": "requires",
+      "created_at": "2026-07-10T18:41:25.308Z"
+    },
+    {
+      "from_node": "writing-code",
+      "to_node": "standalone-picomcp-cli-and-mcp-server",
+      "type": "requires",
+      "created_at": "2026-07-10T18:41:25.363Z"
+    },
+    {
+      "from_node": "editing-code",
+      "to_node": "standalone-picomcp-cli-and-mcp-server",
+      "type": "requires",
+      "created_at": "2026-07-10T18:41:25.418Z"
+    },
+    {
+      "from_node": "editing-sprites",
+      "to_node": "standalone-picomcp-cli-and-mcp-server",
+      "type": "requires",
+      "created_at": "2026-07-10T18:41:25.473Z"
+    },
+    {
+      "from_node": "editing-the-map",
+      "to_node": "standalone-picomcp-cli-and-mcp-server",
+      "type": "requires",
+      "created_at": "2026-07-10T18:41:25.532Z"
+    },
+    {
+      "from_node": "editing-sound-effects",
+      "to_node": "standalone-picomcp-cli-and-mcp-server",
+      "type": "requires",
+      "created_at": "2026-07-10T18:41:25.590Z"
+    },
+    {
+      "from_node": "running-a-cartridge-headlessly",
+      "to_node": "standalone-picomcp-cli-and-mcp-server",
+      "type": "requires",
+      "created_at": "2026-07-10T18:41:25.646Z"
+    },
+    {
+      "from_node": "exporting-a-distributable",
+      "to_node": "standalone-picomcp-cli-and-mcp-server",
+      "type": "requires",
+      "created_at": "2026-07-10T18:41:25.705Z"
+    },
+    {
+      "from_node": "toolbox-contract",
+      "to_node": "standalone-picomcp-cli-and-mcp-server",
+      "type": "requires",
+      "created_at": "2026-07-10T18:41:25.762Z"
+    },
+    {
+      "from_node": "menu-driven-game-collection",
+      "to_node": "standalone-picomcp-cli-and-mcp-server",
+      "type": "requires",
+      "created_at": "2026-07-10T18:41:25.819Z"
     }
   ],
   "findings": [],
