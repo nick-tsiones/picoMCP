@@ -1,6 +1,5 @@
-import { readFile, writeFile, rename, mkdir } from "node:fs/promises";
+import { readFile, writeFile, rename, copyFile, unlink, mkdir } from "node:fs/promises";
 import path from "node:path";
-import os from "node:os";
 import { randomUUID } from "node:crypto";
 import { assertWithinProjectBoundary } from "./path_guard.js";
 
@@ -269,9 +268,23 @@ export class CartRepo {
     const serialized = serializeP8(cart);
     const dir = path.dirname(filePath);
     await mkdir(dir, { recursive: true });
-    const tmpPath = path.join(os.tmpdir(), `cart-${randomUUID()}.p8`);
+    const tmpPath = path.join(path.dirname(filePath), `.cart-${randomUUID()}.tmp`);
     await writeFile(tmpPath, serialized, "utf-8");
-    await rename(tmpPath, filePath);
+    try {
+      await rename(tmpPath, filePath);
+    } catch (error: unknown) {
+      if (
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        (error as { code: string }).code === "EXDEV"
+      ) {
+        await copyFile(tmpPath, filePath);
+        await unlink(tmpPath);
+      } else {
+        throw error;
+      }
+    }
   }
 
   overview(cart: Cart): CartOverview {
@@ -281,9 +294,21 @@ export class CartRepo {
       tabCount: cart.code.length,
       hasSprites: cart.gfx.length > 0 && cart.gfx.some((row) => row.some((b) => b !== 0)),
       hasMap: cart.map.length > 0 && cart.map.some((row) => row.some((b) => b !== 0)),
-      hasSfx: cart.sfx.length > 0,
-      hasMusic: cart.music.length > 0,
+      hasSfx:
+        cart.sfx.length > 0 &&
+        cart.sfx.some((s) => typeof s === "string" && s.length > 0 && !/^0+$/.test(s)),
+      hasMusic:
+        cart.music.length > 0 &&
+        cart.music.some((m) => typeof m === "string" && m.length > 0 && !/^0+$/.test(m)),
       tokenCount: countTokens(code),
     };
+  }
+
+  initCartridge(): Cart {
+    const cart = emptyCart();
+    cart.code = [
+      "-- picoMCP cartridge\n-- generated with picomcp init\n\nfunction _init()\n\t-- initialization\nend\n\nfunction _update()\n\t-- per-frame update\nend\n\nfunction _draw()\n\t-- per-frame draw\nend",
+    ];
+    return cart;
   }
 }

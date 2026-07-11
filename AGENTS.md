@@ -16,6 +16,22 @@ pnpm run test     # run all tests
 pnpm run ci       # all of the above
 ```
 
+## Running the CLI
+
+The built CLI entry point is `packages/picoMCP/dist/index.mjs` (ESM). Run via:
+
+```sh
+node packages/picoMCP/dist/index.mjs <command> [options]
+# or use --root to scope to a specific project:
+node packages/picoMCP/dist/index.mjs --root /path/to/project <command> [options]
+```
+
+Environment variables:
+
+- `PICOMCP_ROOT` — override project root directory (alternative to `--root`)
+- `PICO8_BIN` — path to PICO-8 binary for runtime commands
+- `QD_ROOT` — legacy alias for `PICOMCP_ROOT`
+
 ## Safe editing rules
 
 - Core library functions in `packages/core/src/` must NOT import from `packages/picoMCP/` (no reverse dependencies)

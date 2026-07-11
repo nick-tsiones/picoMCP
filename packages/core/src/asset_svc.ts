@@ -146,6 +146,129 @@ export function setSpriteRange(
   }
 }
 
+export function fillSprite(gfx: number[][], n: number, color: number): void {
+  if (n < 0 || n > 255) throw new Error("Sprite index must be 0-255");
+  if (color < 0 || color > 15) throw new Error("Color must be 0-15");
+  const pixels = Array.from({ length: 64 }, () => color) as number[];
+  setSprite(gfx, n, pixels);
+}
+
+export function fillSpriteRange(
+  gfx: number[][],
+  start: number,
+  end: number,
+  colors: number[],
+): void {
+  if (start < 0 || end > 255 || start > end)
+    throw new Error("Sprite range must be 0-255 and start <= end");
+  const count = end - start + 1;
+  for (let i = 0; i < count; i++) {
+    const color = colors[i] ?? colors[colors.length - 1] ?? 0;
+    fillSprite(gfx, start + i, color);
+  }
+}
+
+export function copySprite(gfx: number[][], from: number, to: number): void {
+  const pixels = getSprite(gfx, from);
+  setSprite(gfx, to, pixels);
+}
+
+export function mirrorSprite(
+  gfx: number[][],
+  n: number,
+  horizontal: boolean,
+  vertical: boolean,
+): void {
+  const pixels = getSprite(gfx, n);
+  const mirrored: number[] = [];
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const srcC = horizontal ? 7 - c : c;
+      const srcR = vertical ? 7 - r : r;
+      mirrored.push(pixels[srcR * 8 + srcC]!);
+    }
+  }
+  setSprite(gfx, n, mirrored);
+}
+
+export function drawSpriteRect(
+  gfx: number[][],
+  n: number,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  color: number,
+  fill: boolean,
+): void {
+  const pixels = getSprite(gfx, n);
+  for (let r = y; r < y + h && r < 8; r++) {
+    for (let c = x; c < x + w && c < 8; c++) {
+      if (r < 0 || c < 0) continue;
+      if (fill || r === y || r === y + h - 1 || c === x || c === x + w - 1) {
+        pixels[r * 8 + c] = color;
+      }
+    }
+  }
+  setSprite(gfx, n, pixels);
+}
+
+export function drawSpriteCircle(
+  gfx: number[][],
+  n: number,
+  cx: number,
+  cy: number,
+  radius: number,
+  color: number,
+  fill: boolean,
+): void {
+  const pixels = getSprite(gfx, n);
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const dx = c - cx;
+      const dy = r - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (fill ? dist <= radius : dist >= radius - 0.5 && dist <= radius + 0.5) {
+        pixels[r * 8 + c] = color;
+      }
+    }
+  }
+  setSprite(gfx, n, pixels);
+}
+
+export function drawSpriteLine(
+  gfx: number[][],
+  n: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  color: number,
+): void {
+  const pixels = getSprite(gfx, n);
+  const dx = Math.abs(x2 - x1);
+  const dy = Math.abs(y2 - y1);
+  const sx = x1 < x2 ? 1 : -1;
+  const sy = y1 < y2 ? 1 : -1;
+  let err = dx - dy;
+  let x = x1;
+  let y = y1;
+  while (true) {
+    if (x >= 0 && x < 8 && y >= 0 && y < 8) pixels[y * 8 + x] = color;
+    if (x === x2 && y === y2) break;
+    const e2 = 2 * err;
+    if (e2 > -dy) {
+      err -= dy;
+      x += sx;
+    }
+    if (e2 < dx) {
+      err += dx;
+      y += sy;
+    }
+  }
+  setSprite(gfx, n, pixels);
+}
+
 function ensureFullMap(map: number[][]): number[][] {
   for (let row = 0; row < 64; row++) {
     if (!map[row]) map[row] = [];
@@ -207,6 +330,96 @@ export function setMapRegion(map: number[][], x: number, y: number, values: numb
       const tile = srcRow[col]!;
       if (tile < 0 || tile > 255) throw new Error(`Tile value ${tile} out of range (0-255)`);
       full[y + row]![x + col] = tile;
+    }
+  }
+}
+
+export function fillMapRect(
+  map: number[][],
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  tile: number,
+): void {
+  if (x < 0 || y < 0 || x + w > 128 || y + h > 64) throw new Error("Map region out of range");
+  if (tile < 0 || tile > 255) throw new Error("Tile must be 0-255");
+  const full = ensureFullMap(map);
+  for (let row = y; row < y + h; row++) {
+    for (let col = x; col < x + w; col++) {
+      full[row]![col] = tile;
+    }
+  }
+}
+
+export function drawMapLine(
+  map: number[][],
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  tile: number,
+  width: number,
+): void {
+  const halfW = Math.floor(width / 2);
+  for (let w = -halfW; w < width - halfW; w++) {
+    drawMapSingleLine(
+      map,
+      x1 + (Math.abs(y2 - y1) > 0 ? w : 0),
+      y1 + (Math.abs(x2 - x1) > 0 ? w : 0),
+      x2 + (Math.abs(y2 - y1) > 0 ? w : 0),
+      y2 + (Math.abs(x2 - x1) > 0 ? w : 0),
+      tile,
+    );
+  }
+}
+
+function drawMapSingleLine(
+  map: number[][],
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  tile: number,
+): void {
+  const dx = Math.abs(x2 - x1);
+  const dy = Math.abs(y2 - y1);
+  const sx = x1 < x2 ? 1 : -1;
+  const sy = y1 < y2 ? 1 : -1;
+  let err = dx - dy;
+  let x = x1;
+  let y = y1;
+  const full = ensureFullMap(map);
+  while (true) {
+    if (x >= 0 && x < 128 && y >= 0 && y < 64) full[y]![x] = tile;
+    if (x === x2 && y === y2) break;
+    const e2 = 2 * err;
+    if (e2 > -dy) {
+      err -= dy;
+      x += sx;
+    }
+    if (e2 < dx) {
+      err += dx;
+      y += sy;
+    }
+  }
+}
+
+export function fillMapCircle(
+  map: number[][],
+  cx: number,
+  cy: number,
+  radius: number,
+  tile: number,
+): void {
+  const full = ensureFullMap(map);
+  for (let y = 0; y < 64; y++) {
+    for (let x = 0; x < 128; x++) {
+      const dx = x - cx;
+      const dy = y - cy;
+      if (Math.sqrt(dx * dx + dy * dy) <= radius) {
+        full[y]![x] = tile;
+      }
     }
   }
 }
@@ -293,6 +506,133 @@ export function listSfx(sfx: unknown[]): { index: number; noteCount: number }[] 
       (n) => n.pitch !== 0 || n.instr !== 0 || n.vol !== 0 || n.fx !== 0,
     ).length;
     result.push({ index: i, noteCount });
+  }
+  return result;
+}
+
+const NOTE_TO_PITCH: Record<string, number> = {
+  c: 0,
+  "c#": 1,
+  d: 2,
+  "d#": 3,
+  e: 4,
+  f: 5,
+  "f#": 6,
+  g: 7,
+  "g#": 8,
+  a: 9,
+  "a#": 10,
+  b: 11,
+};
+
+export function parseSfxTone(
+  notesStr: string,
+  instr: number,
+  vol: number,
+  fx: number,
+  speed: number,
+): Sfx {
+  const notes: SfxNote[] = [];
+  const parts = notesStr.split(/[\s,;]+/).filter(Boolean);
+  for (const part of parts) {
+    const match = part.match(/^([a-gA-G]#?)(\d)$/);
+    if (match) {
+      const noteName = match[1]!.toLowerCase();
+      const octave = parseInt(match[2]!, 10);
+      const basePitch = NOTE_TO_PITCH[noteName];
+      if (basePitch !== undefined) {
+        notes.push({
+          pitch: Math.min(63, Math.max(0, basePitch + octave * 12)),
+          instr,
+          vol,
+          fx,
+        });
+      }
+    }
+  }
+  return { notes, speed, loopStart: 0, loopEnd: 0 };
+}
+
+export const PICO8_COLOR_NAMES: Record<number, string> = {
+  0: "black",
+  1: "darkblue",
+  2: "darkpurple",
+  3: "darkgreen",
+  4: "brown",
+  5: "darkgray",
+  6: "lightgray",
+  7: "white",
+  8: "red",
+  9: "orange",
+  10: "yellow",
+  11: "green",
+  12: "blue",
+  13: "indigo",
+  14: "pink",
+  15: "peach",
+};
+
+export const PICO8_COLOR_SYMBOLS: Record<number, string> = {
+  0: ".",
+  1: "b",
+  2: "p",
+  3: "g",
+  4: "n",
+  5: "d",
+  6: "l",
+  7: "w",
+  8: "r",
+  9: "o",
+  10: "y",
+  11: "G",
+  12: "B",
+  13: "i",
+  14: "P",
+  15: "e",
+};
+
+export function renderSpriteAscii(gfx: number[][], n: number): string {
+  const pixels = getSprite(gfx, n);
+  let result = `Sprite ${n} (8x8):\n`;
+  for (let r = 0; r < 8; r++) {
+    result += "  ";
+    for (let c = 0; c < 8; c++) {
+      const px = pixels[r * 8 + c]!;
+      result += PICO8_COLOR_SYMBOLS[px] ?? "?";
+    }
+    result += "\n";
+  }
+  return result;
+}
+
+export function renderSpriteAsciiAnsi(gfx: number[][], n: number): string {
+  const PICO8_ANSI: Record<number, [number, number, number]> = {
+    0: [0, 0, 0],
+    1: [29, 43, 83],
+    2: [126, 37, 83],
+    3: [0, 135, 81],
+    4: [171, 82, 54],
+    5: [95, 87, 79],
+    6: [194, 195, 199],
+    7: [255, 241, 232],
+    8: [255, 0, 77],
+    9: [255, 163, 0],
+    10: [255, 236, 39],
+    11: [0, 228, 54],
+    12: [41, 173, 255],
+    13: [131, 118, 156],
+    14: [255, 119, 168],
+    15: [255, 204, 170],
+  };
+  const pixels = getSprite(gfx, n);
+  let result = `Sprite ${n} (8x8):\n`;
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const px = pixels[r * 8 + c]!;
+      const [red, green, blue] = PICO8_ANSI[px] ?? [0, 0, 0];
+      result += `\x1b[48;2;${red};${green};${blue}m  \x1b[0m`;
+    }
+    result += "\n";
   }
   return result;
 }

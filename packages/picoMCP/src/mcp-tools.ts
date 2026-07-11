@@ -95,6 +95,7 @@ export const MCP_TOOLS: McpTool[] = [
         },
         captureAt: { type: "number", description: "Frame to capture at (default: frames)" },
         param: { type: "string", description: "Parameter string to pass to the cartridge" },
+        timeoutMs: { type: "number", description: "Timeout in milliseconds (default: 10000)" },
         input: {
           type: "string",
           description:
@@ -405,6 +406,253 @@ export const MCP_TOOLS: McpTool[] = [
     inputSchema: {
       type: "object",
       properties: {},
+    },
+  },
+  {
+    name: "picomcp_init",
+    description: "Create a new PICO-8 cartridge with boilerplate _init/_update/_draw code stubs",
+    inputSchema: {
+      type: "object",
+      properties: {
+        filePath: { type: "string", description: "Path for the new cartridge file" },
+      },
+      required: ["filePath"],
+    },
+  },
+  {
+    name: "picomcp_check",
+    description: "Run parse + lint + size validation on a PICO-8 cartridge in one call",
+    inputSchema: {
+      type: "object",
+      properties: {
+        filePath: { type: "string", description: "Path to the cartridge file" },
+      },
+      required: ["filePath"],
+    },
+  },
+  {
+    name: "picomcp_write",
+    description:
+      "Write code to a PICO-8 cartridge tab, creating the cartridge if it does not exist. Supports --code-file for reading from disk.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        filePath: { type: "string", description: "Path to the cartridge file" },
+        code: { type: "string", description: "Lua code to write" },
+        codeFile: { type: "string", description: "Path to a .lua file containing code to write" },
+        tab: { type: "number", description: "Target tab index (1-based, default: 1)" },
+      },
+      required: ["filePath"],
+    },
+  },
+  {
+    name: "picomcp_sprite_fill",
+    description: "Fill an 8x8 sprite with a solid color (0-15)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        filePath: { type: "string", description: "Path to the cartridge file" },
+        index: { type: "number", description: "Sprite index (1-based, 1-256)" },
+        color: { type: "number", description: "PICO-8 color index (0-15)" },
+      },
+      required: ["filePath", "index", "color"],
+    },
+  },
+  {
+    name: "picomcp_sprite_fill_range",
+    description: "Fill a range of sprites with solid colors",
+    inputSchema: {
+      type: "object",
+      properties: {
+        filePath: { type: "string", description: "Path to the cartridge file" },
+        start: { type: "number", description: "First sprite index (1-based)" },
+        end: { type: "number", description: "Last sprite index (1-based)" },
+        colors: { type: "string", description: "Comma-separated color indices (0-15)" },
+      },
+      required: ["filePath", "start", "end", "colors"],
+    },
+  },
+  {
+    name: "picomcp_sprite_copy",
+    description: "Copy a sprite from one index to another",
+    inputSchema: {
+      type: "object",
+      properties: {
+        filePath: { type: "string", description: "Path to the cartridge file" },
+        from: { type: "number", description: "Source sprite index (1-based)" },
+        to: { type: "number", description: "Destination sprite index (1-based)" },
+      },
+      required: ["filePath", "from", "to"],
+    },
+  },
+  {
+    name: "picomcp_sprite_mirror",
+    description: "Mirror a sprite horizontally and/or vertically",
+    inputSchema: {
+      type: "object",
+      properties: {
+        filePath: { type: "string", description: "Path to the cartridge file" },
+        index: { type: "number", description: "Sprite index (1-based, 1-256)" },
+        horizontal: { type: "boolean", description: "Mirror horizontally" },
+        vertical: { type: "boolean", description: "Mirror vertically" },
+      },
+      required: ["filePath", "index"],
+    },
+  },
+  {
+    name: "picomcp_sprite_draw_rect",
+    description: "Draw a filled or outlined rectangle on a sprite",
+    inputSchema: {
+      type: "object",
+      properties: {
+        filePath: { type: "string", description: "Path to the cartridge file" },
+        index: { type: "number", description: "Sprite index (1-based, 1-256)" },
+        x: { type: "number", description: "X offset (0-based, 0-7)" },
+        y: { type: "number", description: "Y offset (0-based, 0-7)" },
+        width: { type: "number", description: "Width of rectangle" },
+        height: { type: "number", description: "Height of rectangle" },
+        color: { type: "number", description: "PICO-8 color index (0-15)" },
+        stroke: { type: "boolean", description: "If true, draw outline only" },
+      },
+      required: ["filePath", "index", "x", "y", "width", "height", "color"],
+    },
+  },
+  {
+    name: "picomcp_sprite_draw_circle",
+    description: "Draw a filled or outlined circle on a sprite",
+    inputSchema: {
+      type: "object",
+      properties: {
+        filePath: { type: "string", description: "Path to the cartridge file" },
+        index: { type: "number", description: "Sprite index (1-based, 1-256)" },
+        cx: { type: "number", description: "Center X (0-based, 0-7)" },
+        cy: { type: "number", description: "Center Y (0-based, 0-7)" },
+        radius: { type: "number", description: "Radius in pixels" },
+        color: { type: "number", description: "PICO-8 color index (0-15)" },
+        stroke: { type: "boolean", description: "If true, draw outline only" },
+      },
+      required: ["filePath", "index", "cx", "cy", "radius", "color"],
+    },
+  },
+  {
+    name: "picomcp_sprite_draw_line",
+    description: "Draw a line on a sprite",
+    inputSchema: {
+      type: "object",
+      properties: {
+        filePath: { type: "string", description: "Path to the cartridge file" },
+        index: { type: "number", description: "Sprite index (1-based, 1-256)" },
+        x1: { type: "number", description: "Start X (0-based, 0-7)" },
+        y1: { type: "number", description: "Start Y (0-based, 0-7)" },
+        x2: { type: "number", description: "End X (0-based, 0-7)" },
+        y2: { type: "number", description: "End Y (0-based, 0-7)" },
+        color: { type: "number", description: "PICO-8 color index (0-15)" },
+      },
+      required: ["filePath", "index", "x1", "y1", "x2", "y2", "color"],
+    },
+  },
+  {
+    name: "picomcp_sprite_preview",
+    description: "Get an ASCII-art preview of a sprite",
+    inputSchema: {
+      type: "object",
+      properties: {
+        filePath: { type: "string", description: "Path to the cartridge file" },
+        index: { type: "number", description: "Sprite index (1-based, 1-256)" },
+        ansi: { type: "boolean", description: "Use ANSI color codes for terminal preview" },
+      },
+      required: ["filePath", "index"],
+    },
+  },
+  {
+    name: "picomcp_map_fill",
+    description: "Fill a rectangular region of the map with a single tile value",
+    inputSchema: {
+      type: "object",
+      properties: {
+        filePath: { type: "string", description: "Path to the cartridge file" },
+        x: { type: "number", description: "X coordinate (1-based, 1-128)" },
+        y: { type: "number", description: "Y coordinate (1-based, 1-64)" },
+        width: { type: "number", description: "Width of region" },
+        height: { type: "number", description: "Height of region" },
+        tile: { type: "number", description: "Tile value (1-based, 1-256)" },
+      },
+      required: ["filePath", "x", "y", "width", "height", "tile"],
+    },
+  },
+  {
+    name: "picomcp_map_draw_line",
+    description: "Draw a line of tiles on the map",
+    inputSchema: {
+      type: "object",
+      properties: {
+        filePath: { type: "string", description: "Path to the cartridge file" },
+        x1: { type: "number", description: "Start X (1-based, 1-128)" },
+        y1: { type: "number", description: "Start Y (1-based, 1-64)" },
+        x2: { type: "number", description: "End X (1-based, 1-128)" },
+        y2: { type: "number", description: "End Y (1-based, 1-64)" },
+        tile: { type: "number", description: "Tile value (1-based, 1-256)" },
+        width: { type: "number", description: "Line width in tiles" },
+      },
+      required: ["filePath", "x1", "y1", "x2", "y2", "tile"],
+    },
+  },
+  {
+    name: "picomcp_map_draw_circle",
+    description: "Draw a filled circle of tiles on the map",
+    inputSchema: {
+      type: "object",
+      properties: {
+        filePath: { type: "string", description: "Path to the cartridge file" },
+        cx: { type: "number", description: "Center X (1-based, 1-128)" },
+        cy: { type: "number", description: "Center Y (1-based, 1-64)" },
+        radius: { type: "number", description: "Radius in tiles" },
+        tile: { type: "number", description: "Tile value (1-based, 1-256)" },
+      },
+      required: ["filePath", "cx", "cy", "radius", "tile"],
+    },
+  },
+  {
+    name: "picomcp_sfx_tone",
+    description: "Set an SFX using compact musical notation (e.g. C4,E4,G4)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        filePath: { type: "string", description: "Path to the cartridge file" },
+        index: { type: "number", description: "SFX index (1-based, 1-64)" },
+        notes: { type: "string", description: 'Notes in compact notation, e.g. "C4,E4,G4,B4"' },
+        instr: { type: "number", description: "Instrument/waveform index (0-15, default: 0)" },
+        vol: { type: "number", description: "Volume (0-7, default: 4)" },
+        fx: { type: "number", description: "Effect (0-7, default: 0)" },
+        speed: { type: "number", description: "Playback speed (default: 8)" },
+      },
+      required: ["filePath", "index", "notes"],
+    },
+  },
+  {
+    name: "picomcp_edit_insert",
+    description: "Insert code at a specific line in the cartridge without replacing existing lines",
+    inputSchema: {
+      type: "object",
+      properties: {
+        filePath: { type: "string", description: "Path to the cartridge file" },
+        at: { type: "number", description: "Line number to insert before (1-based)" },
+        code: { type: "string", description: "Lua code to insert" },
+      },
+      required: ["filePath", "at", "code"],
+    },
+  },
+  {
+    name: "picomcp_edit_delete",
+    description: "Delete a range of lines from the cartridge",
+    inputSchema: {
+      type: "object",
+      properties: {
+        filePath: { type: "string", description: "Path to the cartridge file" },
+        from: { type: "number", description: "First line to delete (1-based)" },
+        to: { type: "number", description: "Last line to delete (1-based)" },
+      },
+      required: ["filePath", "from", "to"],
     },
   },
 ];

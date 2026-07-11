@@ -364,6 +364,8 @@ export function lintCart(cart: Cart): LintReport {
       if (assignMatch) {
         const before = line.slice(0, assignMatch.index ?? 0);
         const varName = assignMatch[1]!;
+        const isInsideTable =
+          (before.match(/\{/g) || []).length > (before.match(/\}/g) || []).length;
         if (
           !/\blocal\b/.test(before) &&
           !/\bfor\b/.test(before) &&
@@ -371,6 +373,7 @@ export function lintCart(cart: Cart): LintReport {
           !LUA_KEYWORDS.has(varName) &&
           !/\.\s*$/.test(before) &&
           !/\[\s*$/.test(before) &&
+          !isInsideTable &&
           functionDepth === 0
         ) {
           issues.push({

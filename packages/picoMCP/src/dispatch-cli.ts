@@ -1,8 +1,10 @@
 import { resolveProjectRoot, type RunInputFrame } from "@picomcp/core";
 import { readFile } from "node:fs/promises";
 import {
+  checkCartridgeCmd,
   convertCartridge,
   exportCartridge,
+  initCartridgeCmd,
   lintCartridge,
   minifyCartridge,
   parseCartridge,
@@ -13,6 +15,7 @@ import {
   runCartridge,
   sizeCartridge,
   writeCartridge,
+  writeCartridgeFromFile,
 } from "./commands.js";
 import {
   dispatchEdit,
@@ -29,35 +32,53 @@ interface ParsedArgs {
 }
 
 const VALUE_OPTIONS = new Set([
+  "at",
   "capture",
   "capture-at",
   "code",
+  "code-file",
+  "color",
+  "colors",
+  "cx",
+  "cy",
   "data",
   "end",
   "find",
   "frames",
   "from",
+  "fx",
   "height",
   "index",
   "input",
+  "instr",
+  "notes",
   "output",
   "param",
   "pattern",
   "pico8",
   "pixels",
+  "radius",
+  "rename",
   "replace",
   "root",
+  "speed",
   "sprites",
   "sprite",
   "start",
   "tab",
   "tile",
+  "timeout-ms",
   "to",
   "value",
   "values",
+  "vol",
   "width",
   "x",
+  "x1",
+  "x2",
   "y",
+  "y1",
+  "y2",
 ]);
 
 export function parseArgs(argv: string[]): ParsedArgs {
@@ -200,6 +221,12 @@ export async function runCli(argv = process.argv.slice(2)): Promise<void> {
         return handleRead(root, action, args.options, json);
       case "write":
         return handleWrite(root, action, args.options, json);
+      case "init":
+        output(await initCartridgeCmd(root, requiredArg(action, "cartridge file path")), json);
+        return;
+      case "check":
+        output(await checkCartridgeCmd(root, requiredArg(action, "cartridge file path")), json);
+        return;
       case "parse":
         output(await parseCartridge(root, requiredArg(action, "cartridge file path")), json);
         return;
@@ -276,10 +303,15 @@ async function handleWrite(
   json: boolean,
 ): Promise<void> {
   const filePath = requiredArg(action, "cartridge file path");
-  const code = requiredArg(stringOpt(options.code), "--code");
+  const codeFilePath = stringOpt(options["code-file"]);
   const tabStr = stringOpt(options.tab);
   const tabIndex = tabStr ? parsePositiveInteger(tabStr, "--tab") : 1;
-  output(await writeCartridge(root, filePath, code, tabIndex), json);
+  if (codeFilePath) {
+    output(await writeCartridgeFromFile(root, filePath, codeFilePath, tabIndex), json);
+  } else {
+    const code = requiredArg(stringOpt(options.code), "--code");
+    output(await writeCartridge(root, filePath, code, tabIndex), json);
+  }
 }
 
 async function parseInputOption(value: string): Promise<RunInputFrame[]> {
@@ -329,6 +361,7 @@ async function handleRun(
     captureAt: numberOpt(options["capture-at"]),
     param: stringOpt(options.param),
     input,
+    timeoutMs: numberOpt(options["timeout-ms"]),
   });
   output(result, json);
   if (!result.success) process.exitCode = result.timedOut || result.error ? 5 : 1;

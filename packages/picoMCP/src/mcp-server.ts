@@ -2,21 +2,36 @@ import { createInterface } from "node:readline";
 import { MCP_TOOLS, type McpTool } from "./mcp-tools.js";
 import {
   bulkSetFlagsCmd,
+  checkCartridgeCmd,
   convertCartridge,
+  copySpriteCmd,
+  drawSpriteCircleCmd,
+  drawSpriteRectCmd,
+  drawSpriteLineCmd,
+  drawMapLineCmd,
   editAppendCmd,
+  editDeleteCmd,
+  editInsertCmd,
   editRangeCmd,
   editReplaceCmd,
   exportCartridge,
+  fillSpriteCmd,
+  fillSpriteRangeCmd,
+  fillMapRectCmd,
+  fillMapCircleCmd,
   getFlagsCmd,
   getMapCellCmd,
   getMapRegionCmd,
   getSfxCmd,
   getSpriteCmd,
   getSpriteRangeCmd,
+  initCartridgeCmd,
   lintCartridge,
   listSfxCmd,
   minifyCartridge,
+  mirrorSpriteCmd,
   parseCartridge,
+  previewSpriteCmd,
   readOverview,
   readTab,
   refApi,
@@ -26,12 +41,14 @@ import {
   setMapCellCmd,
   setMapRegionCmd,
   setSfxCmd,
+  setSfxToneCmd,
   setSpriteCmd,
   setSpriteRangeCmd,
   sizeCartridge,
   spriteExportCmd,
   spriteImportCmd,
   writeCartridge,
+  writeCartridgeFromFile,
 } from "./commands.js";
 import { resolveProjectRoot, ProjectBoundaryError, type RunInputFrame } from "@picomcp/core";
 
@@ -152,9 +169,22 @@ async function callTool(
     }
     case "picomcp_write": {
       const fp = requireStr(filePath, "filePath");
+      const codeFilePath = args.codeFile as string | undefined;
+      if (codeFilePath) {
+        const tab = args.tab !== undefined ? requireNum(args.tab, "tab") : 1;
+        return writeCartridgeFromFile(root, fp, codeFilePath, tab);
+      }
       const code = requireStr(args.code as string | undefined, "code");
       const tab = args.tab !== undefined ? requireNum(args.tab, "tab") : 1;
       return writeCartridge(root, fp, code, tab);
+    }
+    case "picomcp_init": {
+      const fp = requireStr(filePath, "filePath");
+      return initCartridgeCmd(root, fp);
+    }
+    case "picomcp_check": {
+      const fp = requireStr(filePath, "filePath");
+      return checkCartridgeCmd(root, fp);
     }
     case "picomcp_parse": {
       const fp = requireStr(filePath, "filePath");
@@ -203,6 +233,7 @@ async function callTool(
         captureAt: args.captureAt as number | undefined,
         param: args.param as string | undefined,
         input,
+        timeoutMs: args.timeoutMs as number | undefined,
       });
     }
     case "picomcp_export": {
@@ -385,6 +416,131 @@ async function callTool(
       return refApi();
     case "picomcp_ref_pitfalls":
       return refPitfalls();
+    case "picomcp_sprite_fill": {
+      const fp = requireStr(filePath, "filePath");
+      const index = requireNum(args.index, "index") - 1;
+      const color = requireNum(args.color, "color");
+      if (color < 0 || color > 15) throw new Error("color must be 0-15");
+      return fillSpriteCmd(root, fp, index, color);
+    }
+    case "picomcp_sprite_fill_range": {
+      const fp = requireStr(filePath, "filePath");
+      const start = requireNum(args.start, "start") - 1;
+      const end = requireNum(args.end, "end") - 1;
+      const colorsStr = requireStr(args.colors as string | undefined, "colors");
+      const colors = colorsStr.split(",").map((s) => {
+        const n = parseInt(s.trim(), 10);
+        if (!Number.isInteger(n) || n < 0 || n > 15)
+          throw new Error(`Color "${s.trim()}" must be 0-15`);
+        return n;
+      });
+      return fillSpriteRangeCmd(root, fp, start, end, colors);
+    }
+    case "picomcp_sprite_copy": {
+      const fp = requireStr(filePath, "filePath");
+      const from = requireNum(args.from, "from") - 1;
+      const to = requireNum(args.to, "to") - 1;
+      return copySpriteCmd(root, fp, from, to);
+    }
+    case "picomcp_sprite_mirror": {
+      const fp = requireStr(filePath, "filePath");
+      const index = requireNum(args.index, "index") - 1;
+      const horizontal = Boolean(args.horizontal);
+      const vertical = Boolean(args.vertical);
+      return mirrorSpriteCmd(root, fp, index, horizontal, vertical);
+    }
+    case "picomcp_sprite_draw_rect": {
+      const fp = requireStr(filePath, "filePath");
+      const index = requireNum(args.index, "index") - 1;
+      const x = requireNum(args.x, "x");
+      const y = requireNum(args.y, "y");
+      const w = requireNum(args.width, "width");
+      const h = requireNum(args.height, "height");
+      const color = requireNum(args.color, "color");
+      if (color < 0 || color > 15) throw new Error("color must be 0-15");
+      const stroke = Boolean(args.stroke);
+      return drawSpriteRectCmd(root, fp, index, x, y, w, h, color, !stroke);
+    }
+    case "picomcp_sprite_draw_circle": {
+      const fp = requireStr(filePath, "filePath");
+      const index = requireNum(args.index, "index") - 1;
+      const cx = requireNum(args.cx, "cx");
+      const cy = requireNum(args.cy, "cy");
+      const radius = requireNum(args.radius, "radius");
+      const color = requireNum(args.color, "color");
+      if (color < 0 || color > 15) throw new Error("color must be 0-15");
+      const stroke = Boolean(args.stroke);
+      return drawSpriteCircleCmd(root, fp, index, cx, cy, radius, color, !stroke);
+    }
+    case "picomcp_sprite_draw_line": {
+      const fp = requireStr(filePath, "filePath");
+      const index = requireNum(args.index, "index") - 1;
+      const x1 = requireNum(args.x1, "x1");
+      const y1 = requireNum(args.y1, "y1");
+      const x2 = requireNum(args.x2, "x2");
+      const y2 = requireNum(args.y2, "y2");
+      const color = requireNum(args.color, "color");
+      if (color < 0 || color > 15) throw new Error("color must be 0-15");
+      return drawSpriteLineCmd(root, fp, index, x1, y1, x2, y2, color);
+    }
+    case "picomcp_sprite_preview": {
+      const fp = requireStr(filePath, "filePath");
+      const index = requireNum(args.index, "index") - 1;
+      const ansi = Boolean(args.ansi);
+      return previewSpriteCmd(root, fp, index, ansi);
+    }
+    case "picomcp_map_fill": {
+      const fp = requireStr(filePath, "filePath");
+      const x = requireNum(args.x, "x") - 1;
+      const y = requireNum(args.y, "y") - 1;
+      const w = requireNum(args.width, "width");
+      const h = requireNum(args.height, "height");
+      const tile = requireNum(args.tile, "tile");
+      if (tile > 256) throw new Error("tile must be 1-256");
+      return fillMapRectCmd(root, fp, x, y, w, h, tile - 1);
+    }
+    case "picomcp_map_draw_line": {
+      const fp = requireStr(filePath, "filePath");
+      const x1 = requireNum(args.x1, "x1") - 1;
+      const y1 = requireNum(args.y1, "y1") - 1;
+      const x2 = requireNum(args.x2, "x2") - 1;
+      const y2 = requireNum(args.y2, "y2") - 1;
+      const tile = requireNum(args.tile, "tile");
+      if (tile > 256) throw new Error("tile must be 1-256");
+      const lineWidth = requireNum(args.width ?? 1, "width");
+      return drawMapLineCmd(root, fp, x1, y1, x2, y2, tile - 1, lineWidth);
+    }
+    case "picomcp_map_draw_circle": {
+      const fp = requireStr(filePath, "filePath");
+      const cx = requireNum(args.cx, "cx") - 1;
+      const cy = requireNum(args.cy, "cy") - 1;
+      const radius = requireNum(args.radius, "radius");
+      const tile = requireNum(args.tile, "tile");
+      if (tile > 256) throw new Error("tile must be 1-256");
+      return fillMapCircleCmd(root, fp, cx, cy, radius, tile - 1);
+    }
+    case "picomcp_sfx_tone": {
+      const fp = requireStr(filePath, "filePath");
+      const index = requireNum(args.index, "index") - 1;
+      const notesStr = requireStr(args.notes as string | undefined, "notes");
+      const instr = (args.instr as number | undefined) ?? 0;
+      const vol = (args.vol as number | undefined) ?? 4;
+      const fx = (args.fx as number | undefined) ?? 0;
+      const speed = (args.speed as number | undefined) ?? 8;
+      return setSfxToneCmd(root, fp, index, notesStr, instr, vol, fx, speed);
+    }
+    case "picomcp_edit_insert": {
+      const fp = requireStr(filePath, "filePath");
+      const at = requireNum(args.at, "at");
+      const code = requireStr(args.code as string | undefined, "code");
+      return editInsertCmd(root, fp, at, code);
+    }
+    case "picomcp_edit_delete": {
+      const fp = requireStr(filePath, "filePath");
+      const from = requireNum(args.from, "from");
+      const to = requireNum(args.to, "to");
+      return editDeleteCmd(root, fp, from, to);
+    }
     default:
       throw new Error(`Unknown tool: ${name}`);
   }

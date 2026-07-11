@@ -24,6 +24,15 @@ import { readFile, writeFile } from "node:fs/promises";
 
 export {
   bulkSetFlagsCmd,
+  copySpriteCmd,
+  drawSpriteLineCmd,
+  drawSpriteCircleCmd,
+  drawSpriteRectCmd,
+  fillSpriteCmd,
+  fillSpriteRangeCmd,
+  fillMapRectCmd,
+  fillMapCircleCmd,
+  drawMapLineCmd,
   getSpriteCmd,
   setSpriteCmd,
   getSpriteRangeCmd,
@@ -37,6 +46,9 @@ export {
   listSfxCmd,
   getFlagsCmd,
   setFlagCmd,
+  mirrorSpriteCmd,
+  previewSpriteCmd,
+  setSfxToneCmd,
 } from "./commands-assets.js";
 export type {
   SpriteResult,
@@ -147,6 +159,39 @@ export async function writeCartridge(
   return { ...report, tab: tabIndex };
 }
 
+export async function writeCartridgeFromFile(
+  root: string,
+  filePath: string,
+  codeFilePath: string,
+  tabIndex: number,
+): Promise<WriteResult> {
+  const code = await readFile(codeFilePath, "utf-8");
+  return writeCartridge(root, filePath, code, tabIndex);
+}
+
+export async function initCartridgeCmd(
+  root: string,
+  filePath: string,
+): Promise<{ ok: boolean; filePath: string }> {
+  await assertWithinProjectBoundary(root, filePath);
+  const cart = repo.initCartridge();
+  await repo.save(root, filePath, cart);
+  return { ok: true, filePath };
+}
+
+export async function checkCartridgeCmd(
+  root: string,
+  filePath: string,
+): Promise<{ parse: unknown; lint: unknown; size: unknown; filePath: string }> {
+  const cart = await repo.load(root, filePath);
+  return {
+    parse: parseCode(cart),
+    lint: lintCart(cart),
+    size: reportCartSize(cart),
+    filePath,
+  };
+}
+
 export async function parseCartridge(root: string, filePath: string): Promise<unknown> {
   const cart = await repo.load(root, filePath);
   return parseCode(cart);
@@ -255,18 +300,69 @@ export async function editRangeCmd(
   if (toLine < 1) throw new Error("--to must be a positive integer");
   if (fromLine > toLine) throw new Error("--from must be less than or equal to --to");
 
-  if (fromLine > cart.code.length) {
-    throw new Error(`Tab ${fromLine} does not exist. Cartridge has ${cart.code.length} tab(s).`);
+  const flatCode = cart.code.join("\n");
+  const lines = flatCode.split("\n");
+
+  if (fromLine > lines.length) {
+    throw new Error(`Line ${fromLine} does not exist. Cartridge has ${lines.length} line(s).`);
   }
-  if (toLine > cart.code.length) {
-    throw new Error(`Tab ${toLine} does not exist. Cartridge has ${cart.code.length} tab(s).`);
+  if (toLine > lines.length) {
+    throw new Error(`Line ${toLine} does not exist. Cartridge has ${lines.length} line(s).`);
   }
 
-  cart.code = [
-    ...cart.code.slice(0, fromLine - 1),
-    ...code.split("\n"),
-    ...cart.code.slice(toLine),
-  ];
+  const before = lines.slice(0, fromLine - 1);
+  const after = lines.slice(toLine);
+  const newCode = [...before, ...code.split("\n"), ...after].join("\n");
+  cart.code = [newCode];
+  await repo.save(root, filePath, cart);
+  const report = reportCartSize(cart);
+  return { ...report, replacedRange: { from: fromLine, to: toLine }, tabCount: cart.code.length };
+}
+
+export async function editInsertCmd(
+  root: string,
+  filePath: string,
+  atLine: number,
+  code: string,
+): Promise<EditRangeResult> {
+  const cart = await repo.load(root, filePath);
+  if (atLine < 1) throw new Error("--at must be a positive integer");
+  const flatCode = cart.code.join("\n");
+  const lines = flatCode.split("\n");
+  if (atLine > lines.length + 1) {
+    throw new Error(`Line ${atLine} does not exist. Cartridge has ${lines.length} line(s).`);
+  }
+  const before = lines.slice(0, atLine - 1);
+  const after = lines.slice(atLine - 1);
+  const newCode = [...before, ...code.split("\n"), ...after].join("\n");
+  cart.code = [newCode];
+  await repo.save(root, filePath, cart);
+  const report = reportCartSize(cart);
+  return { ...report, replacedRange: { from: atLine, to: atLine - 1 }, tabCount: cart.code.length };
+}
+
+export async function editDeleteCmd(
+  root: string,
+  filePath: string,
+  fromLine: number,
+  toLine: number,
+): Promise<EditRangeResult> {
+  const cart = await repo.load(root, filePath);
+  if (fromLine < 1) throw new Error("--from must be a positive integer");
+  if (toLine < 1) throw new Error("--to must be a positive integer");
+  if (fromLine > toLine) throw new Error("--from must be less than or equal to --to");
+  const flatCode = cart.code.join("\n");
+  const lines = flatCode.split("\n");
+  if (fromLine > lines.length) {
+    throw new Error(`Line ${fromLine} does not exist. Cartridge has ${lines.length} line(s).`);
+  }
+  if (toLine > lines.length) {
+    throw new Error(`Line ${toLine} does not exist. Cartridge has ${lines.length} line(s).`);
+  }
+  const before = lines.slice(0, fromLine - 1);
+  const after = lines.slice(toLine);
+  const newCode = [...before, ...after].join("\n");
+  cart.code = [newCode];
   await repo.save(root, filePath, cart);
   const report = reportCartSize(cart);
   return { ...report, replacedRange: { from: fromLine, to: toLine }, tabCount: cart.code.length };

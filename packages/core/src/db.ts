@@ -36,7 +36,7 @@ export async function resolveProjectRoot(
   } = {},
 ): Promise<string> {
   const cwd = path.resolve(options.cwd ?? process.cwd());
-  const explicitRoot = options.root ?? process.env.QD_ROOT;
+  const explicitRoot = options.root ?? process.env.QD_ROOT ?? process.env.PICOMCP_ROOT;
   if (explicitRoot) {
     const root = path.resolve(cwd, explicitRoot);
     if (options.allowMissing || (await isDirectory(path.join(root, ".qd")))) return root;

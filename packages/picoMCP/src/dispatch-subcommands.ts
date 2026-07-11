@@ -1,8 +1,19 @@
 import {
   bulkSetFlagsCmd,
+  copySpriteCmd,
+  drawSpriteLineCmd,
+  drawSpriteCircleCmd,
+  drawSpriteRectCmd,
+  drawMapLineCmd,
   editAppendCmd,
+  editDeleteCmd,
+  editInsertCmd,
   editRangeCmd,
   editReplaceCmd,
+  fillSpriteCmd,
+  fillSpriteRangeCmd,
+  fillMapRectCmd,
+  fillMapCircleCmd,
   getFlagsCmd,
   getMapCellCmd,
   getMapRegionCmd,
@@ -10,10 +21,13 @@ import {
   getSpriteCmd,
   getSpriteRangeCmd,
   listSfxCmd,
+  mirrorSpriteCmd,
+  previewSpriteCmd,
   setFlagCmd,
   setMapCellCmd,
   setMapRegionCmd,
   setSfxCmd,
+  setSfxToneCmd,
   setSpriteCmd,
   setSpriteRangeCmd,
   spriteExportCmd,
@@ -21,6 +35,7 @@ import {
 } from "./commands.js";
 import {
   output,
+  numberOpt,
   parseNonNegativeInteger,
   parsePositiveInteger,
   requiredArg,
@@ -114,6 +129,163 @@ export async function dispatchSprite(
       ),
       json,
     );
+  } else if (spriteAction === "fill") {
+    const idx = parseNonNegativeInteger(
+      requiredArg(stringOpt(options.index), "--index"),
+      "sprite index",
+    );
+    const color = parseNonNegativeInteger(
+      requiredArg(stringOpt(options.color), "--color"),
+      "color",
+    );
+    if (color > 15) throw new Error("--color must be 0-15");
+    output(
+      await fillSpriteCmd(root, requiredArg(spriteTarget, "cartridge file path"), idx, color),
+      json,
+    );
+  } else if (spriteAction === "fill-range") {
+    const start = parseNonNegativeInteger(
+      requiredArg(stringOpt(options.start), "--start"),
+      "--start",
+    );
+    const end = parseNonNegativeInteger(requiredArg(stringOpt(options.end), "--end"), "--end");
+    const colorsStr = requiredArg(stringOpt(options.colors), "--colors");
+    const colors = colorsStr.split(",").map((s) => {
+      const n = parseInt(s.trim(), 10);
+      if (!Number.isInteger(n) || n < 0 || n > 15)
+        throw new Error(`Color "${s.trim()}" must be 0-15`);
+      return n;
+    });
+    output(
+      await fillSpriteRangeCmd(
+        root,
+        requiredArg(spriteTarget, "cartridge file path"),
+        start,
+        end,
+        colors,
+      ),
+      json,
+    );
+  } else if (spriteAction === "copy") {
+    const from = parseNonNegativeInteger(requiredArg(stringOpt(options.from), "--from"), "--from");
+    const to = parseNonNegativeInteger(requiredArg(stringOpt(options.to), "--to"), "--to");
+    output(
+      await copySpriteCmd(root, requiredArg(spriteTarget, "cartridge file path"), from, to),
+      json,
+    );
+  } else if (spriteAction === "mirror") {
+    const idx = parseNonNegativeInteger(
+      requiredArg(stringOpt(options.index), "--index"),
+      "sprite index",
+    );
+    const horizontal = Boolean(options.horizontal);
+    const vertical = Boolean(options.vertical);
+    output(
+      await mirrorSpriteCmd(
+        root,
+        requiredArg(spriteTarget, "cartridge file path"),
+        idx,
+        horizontal,
+        vertical,
+      ),
+      json,
+    );
+  } else if (spriteAction === "draw-rect") {
+    const idx = parseNonNegativeInteger(
+      requiredArg(stringOpt(options.index), "--index"),
+      "sprite index",
+    );
+    const x = parseNonNegativeInteger(requiredArg(stringOpt(options.x), "--x"), "--x");
+    const y = parseNonNegativeInteger(requiredArg(stringOpt(options.y), "--y"), "--y");
+    const w = parsePositiveInteger(requiredArg(stringOpt(options.width), "--width"), "--width");
+    const h = parsePositiveInteger(requiredArg(stringOpt(options.height), "--height"), "--height");
+    const color = parseNonNegativeInteger(
+      requiredArg(stringOpt(options.color), "--color"),
+      "color",
+    );
+    if (color > 15) throw new Error("--color must be 0-15");
+    const doFill = !options.stroke;
+    output(
+      await drawSpriteRectCmd(
+        root,
+        requiredArg(spriteTarget, "cartridge file path"),
+        idx,
+        x,
+        y,
+        w,
+        h,
+        color,
+        doFill,
+      ),
+      json,
+    );
+  } else if (spriteAction === "draw-circle") {
+    const idx = parseNonNegativeInteger(
+      requiredArg(stringOpt(options.index), "--index"),
+      "sprite index",
+    );
+    const cx = parseNonNegativeInteger(requiredArg(stringOpt(options.cx), "--cx"), "--cx");
+    const cy = parseNonNegativeInteger(requiredArg(stringOpt(options.cy), "--cy"), "--cy");
+    const radius = parsePositiveInteger(
+      requiredArg(stringOpt(options.radius), "--radius"),
+      "--radius",
+    );
+    const color = parseNonNegativeInteger(
+      requiredArg(stringOpt(options.color), "--color"),
+      "color",
+    );
+    if (color > 15) throw new Error("--color must be 0-15");
+    const doFill = !options.stroke;
+    output(
+      await drawSpriteCircleCmd(
+        root,
+        requiredArg(spriteTarget, "cartridge file path"),
+        idx,
+        cx,
+        cy,
+        radius,
+        color,
+        doFill,
+      ),
+      json,
+    );
+  } else if (spriteAction === "draw-line") {
+    const idx = parseNonNegativeInteger(
+      requiredArg(stringOpt(options.index), "--index"),
+      "sprite index",
+    );
+    const x1 = parseNonNegativeInteger(requiredArg(stringOpt(options.x1), "--x1"), "--x1");
+    const y1 = parseNonNegativeInteger(requiredArg(stringOpt(options.y1), "--y1"), "--y1");
+    const x2 = parseNonNegativeInteger(requiredArg(stringOpt(options.x2), "--x2"), "--x2");
+    const y2 = parseNonNegativeInteger(requiredArg(stringOpt(options.y2), "--y2"), "--y2");
+    const color = parseNonNegativeInteger(
+      requiredArg(stringOpt(options.color), "--color"),
+      "color",
+    );
+    if (color > 15) throw new Error("--color must be 0-15");
+    output(
+      await drawSpriteLineCmd(
+        root,
+        requiredArg(spriteTarget, "cartridge file path"),
+        idx,
+        x1,
+        y1,
+        x2,
+        y2,
+        color,
+      ),
+      json,
+    );
+  } else if (spriteAction === "preview") {
+    const idx = parseNonNegativeInteger(
+      requiredArg(stringOpt(options.index), "--index"),
+      "sprite index",
+    );
+    const ansi = Boolean(options.ansi);
+    output(
+      await previewSpriteCmd(root, requiredArg(spriteTarget, "cartridge file path"), idx, ansi),
+      json,
+    );
   } else {
     throw new Error(`Unknown sprite action: ${spriteAction}`);
   }
@@ -160,6 +332,66 @@ export async function dispatchMap(
     }
     output(
       await setMapRegionCmd(root, requiredArg(mapTarget, "cartridge file path"), x, y, values),
+      json,
+    );
+  } else if (mapAction === "fill") {
+    const x = parsePositiveInteger(requiredArg(stringOpt(options.x), "--x"), "--x") - 1;
+    const y = parsePositiveInteger(requiredArg(stringOpt(options.y), "--y"), "--y") - 1;
+    const w = parsePositiveInteger(requiredArg(stringOpt(options.width), "--width"), "--width");
+    const h = parsePositiveInteger(requiredArg(stringOpt(options.height), "--height"), "--height");
+    const tileRaw =
+      parsePositiveInteger(requiredArg(stringOpt(options.tile), "--tile"), "--tile") - 1;
+    output(
+      await fillMapRectCmd(
+        root,
+        requiredArg(mapTarget, "cartridge file path"),
+        x,
+        y,
+        w,
+        h,
+        tileRaw,
+      ),
+      json,
+    );
+  } else if (mapAction === "draw-line") {
+    const x1 = parsePositiveInteger(requiredArg(stringOpt(options.x1), "--x1"), "--x1") - 1;
+    const y1 = parsePositiveInteger(requiredArg(stringOpt(options.y1), "--y1"), "--y1") - 1;
+    const x2 = parsePositiveInteger(requiredArg(stringOpt(options.x2), "--x2"), "--x2") - 1;
+    const y2 = parsePositiveInteger(requiredArg(stringOpt(options.y2), "--y2"), "--y2") - 1;
+    const tileRaw =
+      parsePositiveInteger(requiredArg(stringOpt(options.tile), "--tile"), "--tile") - 1;
+    const lineWidth = parsePositiveInteger(stringOpt(options.width) ?? "1", "--width");
+    output(
+      await drawMapLineCmd(
+        root,
+        requiredArg(mapTarget, "cartridge file path"),
+        x1,
+        y1,
+        x2,
+        y2,
+        tileRaw,
+        lineWidth,
+      ),
+      json,
+    );
+  } else if (mapAction === "draw-circle") {
+    const cx = parsePositiveInteger(requiredArg(stringOpt(options.cx), "--cx"), "--cx") - 1;
+    const cy = parsePositiveInteger(requiredArg(stringOpt(options.cy), "--cy"), "--cy") - 1;
+    const radius = parsePositiveInteger(
+      requiredArg(stringOpt(options.radius), "--radius"),
+      "--radius",
+    );
+    const tileRaw =
+      parsePositiveInteger(requiredArg(stringOpt(options.tile), "--tile"), "--tile") - 1;
+    output(
+      await fillMapCircleCmd(
+        root,
+        requiredArg(mapTarget, "cartridge file path"),
+        cx,
+        cy,
+        radius,
+        tileRaw,
+      ),
       json,
     );
   } else {
@@ -209,6 +441,29 @@ export async function dispatchSfx(
     );
   } else if (sfxAction === "list") {
     output(await listSfxCmd(root, requiredArg(sfxTarget, "cartridge file path")), json);
+  } else if (sfxAction === "tone") {
+    const idx = parseNonNegativeInteger(
+      requiredArg(stringOpt(options.index), "--index"),
+      "sfx index",
+    );
+    const notesStr = requiredArg(stringOpt(options.notes), "--notes");
+    const instr = numberOpt(options.instr) ?? 0;
+    const vol = numberOpt(options.vol) ?? 4;
+    const fx = numberOpt(options.fx) ?? 0;
+    const speed = numberOpt(options.speed) ?? 8;
+    output(
+      await setSfxToneCmd(
+        root,
+        requiredArg(sfxTarget, "cartridge file path"),
+        idx,
+        notesStr,
+        instr,
+        vol,
+        fx,
+        speed,
+      ),
+      json,
+    );
   } else {
     throw new Error(`Unknown sfx action: ${sfxAction}`);
   }
@@ -280,6 +535,20 @@ export async function dispatchEdit(
   } else if (editAction === "append") {
     const code = requiredArg(stringOpt(options.code), "--code");
     output(await editAppendCmd(root, requiredArg(editTarget, "cartridge file path"), code), json);
+  } else if (editAction === "insert") {
+    const atLine = parsePositiveInteger(requiredArg(stringOpt(options.at), "--at"), "--at");
+    const code = requiredArg(stringOpt(options.code), "--code");
+    output(
+      await editInsertCmd(root, requiredArg(editTarget, "cartridge file path"), atLine, code),
+      json,
+    );
+  } else if (editAction === "delete") {
+    const fromLine = parsePositiveInteger(requiredArg(stringOpt(options.from), "--from"), "--from");
+    const toLine = parsePositiveInteger(requiredArg(stringOpt(options.to), "--to"), "--to");
+    output(
+      await editDeleteCmd(root, requiredArg(editTarget, "cartridge file path"), fromLine, toLine),
+      json,
+    );
   } else {
     throw new Error(`Unknown edit action: ${editAction}`);
   }
